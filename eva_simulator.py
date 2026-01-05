@@ -22,6 +22,9 @@ class ChainDetail:
     total_payout: int           # 合計出玉
     is_jitan_hit: bool = False  # 時短引き戻しかどうか
     jitan_hit_rotation: int = 0 # 時短中何回転目で当たったか
+    is_zanho_hit: bool = False  # 残保留引き戻しかどうか
+    is_charge_hit: bool = False # エヴァチャージかどうか
+    is_charge_bousou: bool = False  # エヴァチャージ暴走かどうか
 
 
 @dataclass
@@ -54,6 +57,13 @@ class MachineSpec:
     jitan_spins_on_fail: int = 100   # ST非突入時の時短回転数
     jitan_spins_after_st: int = 0    # ST終了後の時短回転数
     jitan_rotation_per_1k: float = 30.0  # 時短中の1kあたり回転数（電サポ効率）
+    # 残保留
+    zanho_count: int = 2             # 残保留数（ST/時短終了後）
+    zanho_st_rate: float = 1.0       # 残保留当選時のST突入率
+    # エヴァチャージ（エヴァ17専用）
+    charge_prob: float = 0.0         # エヴァチャージ確率
+    charge_payout: int = 300         # エヴァチャージ出玉
+    charge_st_rate: float = 0.0      # エヴァチャージからのST突入率（暴走）
 
 
 # 機種スペック定義
@@ -71,10 +81,12 @@ EVA15 = MachineSpec(
     # 電チュー: 10R確変(100%)
     denchu_payouts=[(1.0, 1500)],
     st_spins=163,
-    st_continue_rate=0.81,
+    st_continue_rate=0.807,    # 残保留込みで81%になるよう調整
     jitan_spins_on_fail=100,
     jitan_spins_after_st=0,
-    jitan_rotation_per_1k=30.0
+    jitan_rotation_per_1k=30.0,
+    zanho_count=2,             # 残保留2個
+    zanho_st_rate=1.0,         # 残保留当選時100%ST
 )
 
 EVA17 = MachineSpec(
@@ -94,10 +106,16 @@ EVA17 = MachineSpec(
         (0.02, 4800),   # 8R×4（レア）
     ],
     st_spins=157,
-    st_continue_rate=0.80,
+    st_continue_rate=0.795,    # 実機値
     jitan_spins_on_fail=100,
     jitan_spins_after_st=0,
-    jitan_rotation_per_1k=30.0
+    jitan_rotation_per_1k=30.0,
+    zanho_count=2,
+    zanho_st_rate=1.0,
+    # エヴァチャージ
+    charge_prob=1 / 2750.9,    # エヴァチャージ確率
+    charge_payout=300,         # 300発獲得
+    charge_st_rate=0.02,       # 2%で暴走（ST突入）
 )
 
 
@@ -154,33 +172,36 @@ def simulate_session(
         spins_to_hit = 0
 
         # 当たりを引くまで回す（通常状態）
+        charge_triggered = False
+        charge_bousou = False
         while rotations < total_rotations:
             rotations += 1
             spins_to_hit += 1
+
+            # エヴァチャージチェック（エヴァ17専用）
+            if spec.charge_prob > 0 and np.random.random() < spec.charge_prob:
+                total_payout += spec.charge_payout
+                charge_triggered = True
+                # 暴走チェック（ST突入）
+                if np.random.random() < spec.charge_st_rate:
+                    charge_bousou = True
+                    break
+
             if np.random.random() < spec.hit_prob:
                 break
 
         # 投資玉数を計算（通常状態）
         investment_balls += spins_to_hit / rotation_per_1k * balls_per_1k
 
-        # 規定回転数に達して当たらなかった場合は終了
-        if rotations >= total_rotations and np.random.random() >= spec.hit_prob:
-            break
+        # エヴァチャージ暴走 → ST直接突入
+        if charge_bousou:
+            hit_rotations.append(spins_to_hit)
+            first_hit_payout = spec.charge_payout  # チャージ出玉は既に加算済み
+            chain_payout = first_hit_payout
+            st_payouts: List[int] = []
+            chain_count = 1
 
-        # 初当たり記録
-        hit_rotations.append(spins_to_hit)
-
-        # ヘソ入賞時（特図1）の振り分け
-        first_hit_payout, st_entered = get_heso_payout(spec)
-        total_payout += first_hit_payout
-        chain_payout = first_hit_payout
-        st_payouts: List[int] = []
-
-        # ST突入 & 連チャン
-        chain_count = 1  # 初当たりを1連とカウント
-
-        if st_entered:
-            # ST継続ループ（電チュー入賞の振り分けを使用）
+            # ST継続ループ（暴走からのST）
             while np.random.random() < spec.st_continue_rate:
                 denchu_payout = get_denchu_payout(spec)
                 total_payout += denchu_payout
@@ -188,18 +209,58 @@ def simulate_session(
                 st_payouts.append(denchu_payout)
                 chain_count += 1
 
-        chains.append(chain_count)
+            chains.append(chain_count)
+            chain_details.append(ChainDetail(
+                first_hit_rotation=spins_to_hit,
+                chain_count=chain_count,
+                first_hit_payout=first_hit_payout,
+                st_payouts=st_payouts,
+                total_payout=chain_payout,
+                is_charge_hit=True,
+                is_charge_bousou=True
+            ))
 
-        # 連チャン詳細を記録
-        chain_details.append(ChainDetail(
-            first_hit_rotation=spins_to_hit,
-            chain_count=chain_count,
-            first_hit_payout=first_hit_payout,
-            st_payouts=st_payouts,
-            total_payout=chain_payout,
-            is_jitan_hit=False,
-            jitan_hit_rotation=0
-        ))
+            # 暴走後の時短
+            st_entered = True
+        else:
+            # 通常の初当たり処理
+            # 規定回転数に達して当たらなかった場合は終了
+            if rotations >= total_rotations and np.random.random() >= spec.hit_prob:
+                break
+
+            # 初当たり記録
+            hit_rotations.append(spins_to_hit)
+
+            # ヘソ入賞時（特図1）の振り分け
+            first_hit_payout, st_entered = get_heso_payout(spec)
+            total_payout += first_hit_payout
+            chain_payout = first_hit_payout
+            st_payouts: List[int] = []
+
+            # ST突入 & 連チャン
+            chain_count = 1  # 初当たりを1連とカウント
+
+            if st_entered:
+                # ST継続ループ（電チュー入賞の振り分けを使用）
+                while np.random.random() < spec.st_continue_rate:
+                    denchu_payout = get_denchu_payout(spec)
+                    total_payout += denchu_payout
+                    chain_payout += denchu_payout
+                    st_payouts.append(denchu_payout)
+                    chain_count += 1
+
+            chains.append(chain_count)
+
+            # 連チャン詳細を記録
+            chain_details.append(ChainDetail(
+                first_hit_rotation=spins_to_hit,
+                chain_count=chain_count,
+                first_hit_payout=first_hit_payout,
+                st_payouts=st_payouts,
+                total_payout=chain_payout,
+                is_jitan_hit=False,
+                jitan_hit_rotation=0
+            ))
 
         # 時短処理
         jitan_spins = spec.jitan_spins_after_st if st_entered else spec.jitan_spins_on_fail
@@ -220,7 +281,50 @@ def simulate_session(
             investment_balls += jitan_spin_count / spec.jitan_rotation_per_1k * balls_per_1k
 
             if not hit_in_jitan:
-                # 時短スルー → 通常状態に戻る
+                # 時短スルー → 残保留チェック
+                zanho_hit = False
+                for _ in range(spec.zanho_count):
+                    if np.random.random() < spec.hit_prob:
+                        zanho_hit = True
+                        break
+
+                if zanho_hit:
+                    # 残保留当選 → 電チュー振り分け、高確率でST突入
+                    hit_rotations.append(0)  # 残保留は0回転扱い
+                    first_hit_payout = get_denchu_payout(spec)
+                    total_payout += first_hit_payout
+                    chain_payout = first_hit_payout
+                    st_payouts = []
+                    chain_count = 1
+                    zanho_st_entered = np.random.random() < spec.zanho_st_rate
+
+                    if zanho_st_entered:
+                        # ST継続ループ
+                        while np.random.random() < spec.st_continue_rate:
+                            denchu_payout = get_denchu_payout(spec)
+                            total_payout += denchu_payout
+                            chain_payout += denchu_payout
+                            st_payouts.append(denchu_payout)
+                            chain_count += 1
+
+                    chains.append(chain_count)
+                    chain_details.append(ChainDetail(
+                        first_hit_rotation=0,
+                        chain_count=chain_count,
+                        first_hit_payout=first_hit_payout,
+                        st_payouts=st_payouts,
+                        total_payout=chain_payout,
+                        is_jitan_hit=False,
+                        jitan_hit_rotation=0,
+                        is_zanho_hit=True
+                    ))
+
+                    # 残保留からのST後、また時短へ
+                    if zanho_st_entered:
+                        jitan_spins = spec.jitan_spins_after_st
+                        continue
+
+                # 残保留も当たらなかった → 通常状態に戻る
                 break
 
             # 時短中に当たり（引き戻し）→ 電チューなのでST確定
@@ -393,9 +497,19 @@ def print_session_details(results: List[SessionResult], spec: MachineSpec):
             cumulative_rotation += chain.first_hit_rotation
             total_payout += chain.total_payout
 
-            # 初当たり情報（時短引き戻しかどうかを表示）
-            jitan_label = "【時短引戻】" if chain.is_jitan_hit else ""
-            print(f"\n  ▶ 当たり{j}: {chain.first_hit_rotation}回転目 (累計{cumulative_rotation}回転) {jitan_label}")
+            # 初当たり情報（特殊当たりのラベル表示）
+            label = ""
+            if chain.is_charge_bousou:
+                label = "【チャージ暴走】"
+            elif chain.is_charge_hit:
+                label = "【チャージ】"
+            elif chain.is_zanho_hit:
+                label = "【残保留】"
+            elif chain.is_jitan_hit:
+                label = "【時短引戻】"
+
+            rotation_text = f"{chain.first_hit_rotation}回転目" if chain.first_hit_rotation > 0 else "残保留"
+            print(f"\n  ▶ 当たり{j}: {rotation_text} (累計{cumulative_rotation}回転) {label}")
             print(f"    初当たり: {chain.first_hit_payout:,}発", end="")
 
             # ST突入・連チャン情報
