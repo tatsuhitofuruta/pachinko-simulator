@@ -13,6 +13,16 @@ import argparse
 
 
 @dataclass
+class ChainDetail:
+    """1回の連チャン（初当たり〜連チャン終了）の詳細"""
+    first_hit_rotation: int     # 初当たりまでの回転数
+    chain_count: int            # 連チャン数（初当たり含む）
+    first_hit_payout: int       # 初当たり出玉
+    st_payouts: List[int]       # ST中の各当たり出玉リスト
+    total_payout: int           # 合計出玉
+
+
+@dataclass
 class SessionResult:
     """1回の稼働結果"""
     profit: float               # 収支（円）
@@ -21,6 +31,7 @@ class SessionResult:
     max_chain: int              # 最大連チャン数
     chains: List[int]           # 各初当たりの連チャン数リスト
     hit_rotations: List[int]    # 各初当たりまでの回転数リスト
+    chain_details: List[ChainDetail] = None  # 各連チャンの詳細
 
 
 @dataclass
@@ -93,6 +104,7 @@ def simulate_session(
     # サマリー用
     hit_rotations: List[int] = []
     chains: List[int] = []
+    chain_details: List[ChainDetail] = []
 
     while rotations < total_rotations:
         spins_to_hit = 0
@@ -115,7 +127,10 @@ def simulate_session(
         hit_rotations.append(spins_to_hit)
 
         # 初当たり出玉獲得（確率分岐）
-        total_payout += get_first_hit_payout(spec)
+        first_hit_payout = get_first_hit_payout(spec)
+        total_payout += first_hit_payout
+        chain_payout = first_hit_payout
+        st_payouts: List[int] = []
 
         # ST突入判定 & 連チャン
         chain_count = 1  # 初当たりを1連とカウント
@@ -123,8 +138,19 @@ def simulate_session(
             # ST継続ループ
             while np.random.random() < spec.st_continue_rate:
                 total_payout += spec.st_hit_payout
+                chain_payout += spec.st_hit_payout
+                st_payouts.append(spec.st_hit_payout)
                 chain_count += 1
         chains.append(chain_count)
+
+        # 連チャン詳細を記録
+        chain_details.append(ChainDetail(
+            first_hit_rotation=spins_to_hit,
+            chain_count=chain_count,
+            first_hit_payout=first_hit_payout,
+            st_payouts=st_payouts,
+            total_payout=chain_payout
+        ))
 
     # 収支計算（等価4円）
     profit = (total_payout - investment_balls) * 4
@@ -135,7 +161,8 @@ def simulate_session(
         first_hit_rotation=hit_rotations[0] if hit_rotations else 0,
         max_chain=max(chains) if chains else 0,
         chains=chains,
-        hit_rotations=hit_rotations
+        hit_rotations=hit_rotations,
+        chain_details=chain_details
     )
 
 
@@ -240,6 +267,50 @@ def print_statistics(results: List[SessionResult], spec_name: str):
             print(f"    {label:<12}: {pct:5.1f}% {bar}")
 
 
+def print_session_details(results: List[SessionResult], spec: MachineSpec):
+    """各セッションの当たり履歴を表示（少数シミュレーション用）"""
+    for i, result in enumerate(results, 1):
+        if len(results) > 1:
+            print(f"\n{'='*50}")
+            print(f"【稼働 {i}】収支: {result.profit:+,.0f}円")
+            print(f"{'='*50}")
+        else:
+            print(f"\n{'='*50}")
+            print(f"【当たり履歴】")
+            print(f"{'='*50}")
+
+        if not result.chain_details:
+            print("  当たりなし")
+            continue
+
+        cumulative_rotation = 0
+        total_payout = 0
+
+        for j, chain in enumerate(result.chain_details, 1):
+            cumulative_rotation += chain.first_hit_rotation
+            total_payout += chain.total_payout
+
+            # 初当たり情報
+            print(f"\n  ▶ 当たり{j}: {chain.first_hit_rotation}回転目 (累計{cumulative_rotation}回転)")
+            print(f"    初当たり: {chain.first_hit_payout:,}発", end="")
+
+            # ST突入・連チャン情報
+            if chain.chain_count > 1:
+                print(f" → ST突入 → {chain.chain_count}連")
+                for k, st_payout in enumerate(chain.st_payouts, 2):
+                    print(f"      {k}連目: {st_payout:,}発")
+            else:
+                print(" → ST非突入（単発）")
+
+            print(f"    → 合計出玉: {chain.total_payout:,}発")
+
+        # セッションサマリー
+        print(f"\n  {'-'*40}")
+        print(f"  総当たり回数: {len(result.chain_details)}回")
+        print(f"  総獲得出玉: {total_payout:,}発")
+        print(f"  最終収支: {result.profit:+,.0f}円")
+
+
 def compare_machines(rotation_per_1k: float, total_rotations: int = 2000, num_sims: int = 50000):
     """エヴァ15とエヴァ17を比較"""
     print("=" * 60)
@@ -335,6 +406,9 @@ def main():
         spec = EVA15 if args.machine == "eva15" else EVA17
         results = run_simulation(spec, args.spins, args.rotation, args.sims)
         print_statistics(results, spec.name)
+        # 少数シミュレーションの場合は当たり履歴も表示
+        if args.sims <= 10:
+            print_session_details(results, spec)
 
 
 if __name__ == "__main__":
