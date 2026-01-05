@@ -75,13 +75,14 @@ EVA15 = MachineSpec(
     st_hit_prob=1 / 99.4,
     border_touka=17.0,
     # ヘソ: 10R確変(3%), 3R確変(56%), 3R通常(41%)
+    # ※出玉は実増え（15賞玉-1発=14発/カウント）
     heso_payouts=[
-        (0.03, 1500, True),   # 10R確変 → ST
-        (0.56, 450, True),    # 3R確変 → ST
-        (0.41, 450, False),   # 3R通常 → 時短
+        (0.03, 1400, True),   # 10R確変 → ST (10R×10C×14発)
+        (0.56, 420, True),    # 3R確変 → ST (3R×10C×14発)
+        (0.41, 420, False),   # 3R通常 → 時短
     ],
     # 電チュー: 10R確変(100%)
-    denchu_payouts=[(1.0, 1500)],
+    denchu_payouts=[(1.0, 1400)],  # 10R×10C×14発
     st_spins=163,
     st_continue_rate=0.807,    # 残保留込みで81%になるよう調整
     jitan_spins_on_fail=100,
@@ -97,15 +98,16 @@ EVA17 = MachineSpec(
     st_hit_prob=1 / 99.6,
     border_touka=16.8,
     # ヘソ: 10R+ST(0.5%), 2R+時短(49.5%), 2R+ST(50%)
+    # ※出玉は実増え（15賞玉-1発=14発/カウント）
     heso_payouts=[
-        (0.005, 1500, True),   # 10R → ST
-        (0.495, 300, False),   # 2R → 時短
-        (0.50, 300, True),     # 2R → ST
+        (0.005, 1400, True),   # 10R → ST (10R×10C×14発)
+        (0.495, 280, False),   # 2R → 時短 (2R×10C×14発)
+        (0.50, 280, True),     # 2R → ST
     ],
     # 電チュー: 8R×2(98%), 8R×4(2%) ※レア振り分け推定
     denchu_payouts=[
-        (0.98, 2400),   # 8R×2
-        (0.02, 4800),   # 8R×4（レア）
+        (0.98, 2240),   # 8R×2 (16R×10C×14発)
+        (0.02, 4480),   # 8R×4（レア）(32R×10C×14発)
     ],
     st_spins=157,
     st_continue_rate=0.795,    # 実機値
@@ -116,7 +118,7 @@ EVA17 = MachineSpec(
     zanho_st_rate=1.0,
     # エヴァチャージ
     charge_prob=1 / 2750.9,    # エヴァチャージ確率
-    charge_payout=300,         # 300発獲得
+    charge_payout=280,         # 2R×10C×14発
     charge_st_rate=0.02,       # 2%で暴走（ST突入）
 )
 
