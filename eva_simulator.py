@@ -13,15 +13,26 @@ import argparse
 
 
 @dataclass
+class SessionResult:
+    """1回の稼働結果"""
+    profit: float               # 収支（円）
+    total_hits: int             # 総当たり回数
+    first_hit_rotation: int     # 初当たり回転数（0=当たらず）
+    max_chain: int              # 最大連チャン数
+    chains: List[int]           # 各初当たりの連チャン数リスト
+    hit_rotations: List[int]    # 各初当たりまでの回転数リスト
+
+
+@dataclass
 class MachineSpec:
     """パチンコ機種スペック"""
     name: str
     hit_prob: float          # 大当り確率（例: 1/319.7 → 0.003128）
     st_entry_rate: float     # ST突入率
     st_continue_rate: float  # ST継続率
-    first_hit_payout: int    # 初当たり平均出玉
     st_hit_payout: int       # ST中大当り出玉
     border_touka: float      # 等価ボーダー（1k回転数）
+    first_hit_payouts: List[Tuple[float, int]] = None  # [(確率, 出玉), ...]
 
 
 # 機種スペック定義
@@ -30,9 +41,9 @@ EVA15 = MachineSpec(
     hit_prob=1 / 319.7,
     st_entry_rate=0.70,
     st_continue_rate=0.81,
-    first_hit_payout=450,
     st_hit_payout=1500,
-    border_touka=17.0
+    border_touka=17.0,
+    first_hit_payouts=[(0.03, 1500), (0.97, 450)]  # 3%で1500発、97%で450発
 )
 
 EVA17 = MachineSpec(
@@ -40,10 +51,21 @@ EVA17 = MachineSpec(
     hit_prob=1 / 399.9,
     st_entry_rate=0.61,
     st_continue_rate=0.80,
-    first_hit_payout=600,
     st_hit_payout=2400,
-    border_touka=16.8
+    border_touka=16.8,
+    first_hit_payouts=[(0.005, 1500), (0.995, 300)]  # 0.5%で1500発、99.5%で300発
 )
+
+
+def get_first_hit_payout(spec: MachineSpec) -> int:
+    """初当たり出玉を確率に基づいて決定"""
+    r = np.random.random()
+    cumulative = 0.0
+    for prob, payout in spec.first_hit_payouts:
+        cumulative += prob
+        if r < cumulative:
+            return payout
+    return spec.first_hit_payouts[-1][1]
 
 
 def simulate_session(
@@ -51,52 +73,70 @@ def simulate_session(
     total_rotations: int,
     rotation_per_1k: float,
     balls_per_1k: int = 250
-) -> float:
+) -> SessionResult:
     """
     1回の稼働をシミュレート
-    
+
     Args:
         spec: 機種スペック
         total_rotations: 総回転数
         rotation_per_1k: 千円あたり回転数
         balls_per_1k: 千円あたり貸玉数
-    
+
     Returns:
-        収支（円）
+        SessionResult: 稼働結果（収支・サマリー情報）
     """
     rotations = 0
     total_payout = 0
     investment_balls = 0
-    
+
+    # サマリー用
+    hit_rotations: List[int] = []
+    chains: List[int] = []
+
     while rotations < total_rotations:
         spins_to_hit = 0
-        
+
         # 当たりを引くまで回す
         while rotations < total_rotations:
             rotations += 1
             spins_to_hit += 1
             if np.random.random() < spec.hit_prob:
                 break
-        
+
         # 投資玉数を計算
         investment_balls += spins_to_hit / rotation_per_1k * balls_per_1k
-        
+
         # 規定回転数に達して当たらなかった場合は終了
         if rotations >= total_rotations and np.random.random() >= spec.hit_prob:
             break
-        
-        # 初当たり出玉獲得
-        total_payout += spec.first_hit_payout
-        
-        # ST突入判定
+
+        # 初当たり記録
+        hit_rotations.append(spins_to_hit)
+
+        # 初当たり出玉獲得（確率分岐）
+        total_payout += get_first_hit_payout(spec)
+
+        # ST突入判定 & 連チャン
+        chain_count = 1  # 初当たりを1連とカウント
         if np.random.random() < spec.st_entry_rate:
             # ST継続ループ
             while np.random.random() < spec.st_continue_rate:
                 total_payout += spec.st_hit_payout
-    
+                chain_count += 1
+        chains.append(chain_count)
+
     # 収支計算（等価4円）
     profit = (total_payout - investment_balls) * 4
-    return profit
+
+    return SessionResult(
+        profit=profit,
+        total_hits=len(hit_rotations),
+        first_hit_rotation=hit_rotations[0] if hit_rotations else 0,
+        max_chain=max(chains) if chains else 0,
+        chains=chains,
+        hit_rotations=hit_rotations
+    )
 
 
 def run_simulation(
@@ -104,24 +144,24 @@ def run_simulation(
     total_rotations: int,
     rotation_per_1k: float,
     num_simulations: int = 100000
-) -> np.ndarray:
+) -> List[SessionResult]:
     """
     複数回シミュレーションを実行
-    
+
     Args:
         spec: 機種スペック
         total_rotations: 総回転数
         rotation_per_1k: 千円あたり回転数
         num_simulations: シミュレーション回数
-    
+
     Returns:
-        収支結果の配列
+        SessionResultのリスト
     """
     results = []
     for _ in range(num_simulations):
-        profit = simulate_session(spec, total_rotations, rotation_per_1k)
-        results.append(profit)
-    return np.array(results)
+        result = simulate_session(spec, total_rotations, rotation_per_1k)
+        results.append(result)
+    return results
 
 
 def calculate_hamari_prob(prob: float, rotations: int) -> float:
@@ -138,19 +178,45 @@ def calculate_hamari_prob(prob: float, rotations: int) -> float:
     return (1 - prob) ** rotations
 
 
-def print_statistics(results: np.ndarray, spec_name: str):
+def print_statistics(results: List[SessionResult], spec_name: str):
     """シミュレーション結果の統計を表示"""
-    win_rate = np.sum(results > 0) / len(results) * 100
-    avg_profit = np.mean(results)
-    median_profit = np.median(results)
-    std_dev = np.std(results)
-    
+    profits = np.array([r.profit for r in results])
+    win_rate = np.sum(profits > 0) / len(profits) * 100
+    avg_profit = np.mean(profits)
+    median_profit = np.median(profits)
+    std_dev = np.std(profits)
+
+    # サマリー情報
+    first_hit_rotations = [r.first_hit_rotation for r in results if r.first_hit_rotation > 0]
+    all_chains = [c for r in results for c in r.chains]
+    max_chains = [r.max_chain for r in results if r.max_chain > 0]
+
     print(f"\n【{spec_name}】")
     print(f"  勝率: {win_rate:.1f}%")
     print(f"  平均収支: {avg_profit:+,.0f}円")
     print(f"  中央値: {median_profit:+,.0f}円")
     print(f"  標準偏差: {std_dev:,.0f}円")
-    
+
+    # 初当たり・連チャン情報
+    if first_hit_rotations:
+        print(f"\n  初当たり回転数:")
+        print(f"    平均: {np.mean(first_hit_rotations):.0f}回転")
+        print(f"    中央値: {np.median(first_hit_rotations):.0f}回転")
+    if all_chains:
+        print(f"\n  連チャン数:")
+        print(f"    平均: {np.mean(all_chains):.1f}連")
+        print(f"    最大: {max(max_chains)}連")
+        # 連チャン分布
+        chain_counts = {}
+        for c in all_chains:
+            chain_counts[c] = chain_counts.get(c, 0) + 1
+        print(f"    分布: ", end="")
+        for i in range(1, min(8, max(all_chains) + 1)):
+            pct = chain_counts.get(i, 0) / len(all_chains) * 100
+            if pct >= 1:
+                print(f"{i}連:{pct:.0f}% ", end="")
+        print()
+
     print(f"\n  収支分布:")
     brackets = [
         (-999999, -80000, "8万負け以上"),
@@ -165,10 +231,10 @@ def print_statistics(results: np.ndarray, spec_name: str):
         (80000, 150000, "8〜15万勝ち"),
         (150000, 999999, "15万勝ち以上"),
     ]
-    
+
     for low, high, label in brackets:
-        count = np.sum((results >= low) & (results < high))
-        pct = count / len(results) * 100
+        count = np.sum((profits >= low) & (profits < high))
+        pct = count / len(profits) * 100
         if pct >= 0.5:
             bar = "█" * int(pct / 2)
             print(f"    {label:<12}: {pct:5.1f}% {bar}")
@@ -194,13 +260,15 @@ def compare_machines(rotation_per_1k: float, total_rotations: int = 2000, num_si
     print_statistics(results_17, EVA17.name)
     
     # サマリー
+    profits_15 = np.array([r.profit for r in results_15])
+    profits_17 = np.array([r.profit for r in results_17])
     print("\n" + "=" * 60)
     print("【サマリー】")
     print("=" * 60)
     print(f"{'機種':<20} {'勝率':>8} {'平均収支':>12} {'標準偏差':>10}")
     print("-" * 55)
-    print(f"{'エヴァ15':<20} {np.sum(results_15>0)/len(results_15)*100:>7.1f}% {np.mean(results_15):>+11,.0f}円 {np.std(results_15):>9,.0f}円")
-    print(f"{'エヴァ17':<20} {np.sum(results_17>0)/len(results_17)*100:>7.1f}% {np.mean(results_17):>+11,.0f}円 {np.std(results_17):>9,.0f}円")
+    print(f"{'エヴァ15':<20} {np.sum(profits_15>0)/len(profits_15)*100:>7.1f}% {np.mean(profits_15):>+11,.0f}円 {np.std(profits_15):>9,.0f}円")
+    print(f"{'エヴァ17':<20} {np.sum(profits_17>0)/len(profits_17)*100:>7.1f}% {np.mean(profits_17):>+11,.0f}円 {np.std(profits_17):>9,.0f}円")
 
 
 def hamari_comparison():
