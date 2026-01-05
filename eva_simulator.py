@@ -88,7 +88,7 @@ EVA15 = MachineSpec(
     jitan_spins_on_fail=100,
     jitan_spins_after_st=0,
     jitan_rotation_per_1k=30.0,
-    zanho_count=2,             # 残保留2個
+    zanho_count=4,             # 残保留4個
     zanho_st_rate=1.0,         # 残保留当選時100%ST
 )
 
