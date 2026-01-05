@@ -10,6 +10,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Tuple, List
 import argparse
+import time
+import sys
 
 
 @dataclass
@@ -529,6 +531,235 @@ def print_session_details(results: List[SessionResult], spec: MachineSpec):
         print(f"  最終収支: {result.profit:+,.0f}円")
 
 
+def play_realtime_session(
+    spec: MachineSpec,
+    total_rotations: int,
+    rotation_per_1k: float,
+    fast_mode: bool = False,
+    balls_per_1k: int = 250
+):
+    """
+    リアルプレイモード：回転数がカウントアップし、当たったら連チャンを表示
+
+    Args:
+        spec: 機種スペック
+        total_rotations: 総回転数
+        rotation_per_1k: 千円あたり回転数
+        fast_mode: 高速モード（待ち時間なし）
+        balls_per_1k: 千円あたり貸玉数
+    """
+    rotations = 0
+    my_balls = 0.0          # 現在の持ち玉
+    total_investment = 0    # 総投資額（円）
+    hit_count = 0
+
+    # 1回転あたりの消費玉
+    balls_per_spin = balls_per_1k / rotation_per_1k
+    balls_per_spin_jitan = balls_per_1k / spec.jitan_rotation_per_1k
+
+    def consume_balls(amount: float):
+        """玉を消費。持ち玉から使い、足りなければ追加投資"""
+        nonlocal my_balls, total_investment
+        if my_balls >= amount:
+            my_balls -= amount
+        else:
+            # 持ち玉不足分を追加投資
+            shortage = amount - my_balls
+            my_balls = 0
+            # 1000円単位で追加投資（250発単位）
+            invest_units = int(shortage / balls_per_1k) + 1
+            total_investment += invest_units * 1000
+            my_balls += invest_units * balls_per_1k - shortage
+
+    # 表示用
+    def show_status(state: str = "通常"):
+        profit = int(my_balls * 4) - total_investment
+        print(f"\r【{rotations:>4}回転】 持玉: {int(my_balls):>6,}発 | 投資: {total_investment:>,}円 | 収支: {profit:>+,}円  [{state}]", end="", flush=True)
+
+    def wait(sec: float):
+        if not fast_mode:
+            time.sleep(sec)
+
+    def run_st_loop(initial_payout: int) -> Tuple[int, int]:
+        """ST連チャンを回転数ベースでシミュレート。(連チャン数, 合計出玉)を返す"""
+        nonlocal my_balls
+        chain_count = 1
+        chain_payout = initial_payout
+
+        print(f"  >>> ST突入！（{spec.st_spins}回転）")
+        wait(0.8)
+
+        # ST中ループ（回転数ベース）
+        while True:
+            st_spin = 0
+            hit_in_st = False
+
+            # ST回転消化
+            for st_spin in range(1, spec.st_spins + 1):
+                if np.random.random() < spec.st_hit_prob:
+                    hit_in_st = True
+                    break
+
+            if not hit_in_st:
+                # STスルー（規定回転で当たらず）
+                break
+
+            # ST中当たり（ゆっくり表示）
+            chain_count += 1
+            payout = get_denchu_payout(spec)
+            my_balls += payout
+            chain_payout += payout
+            print(f"    {chain_count}連目: ST{st_spin}回転 +{payout:,}発 (計{chain_payout:,}発)")
+            wait(0.6)
+
+        wait(0.3)
+        print(f"  ST終了 → {chain_count}連チャン！ 合計{chain_payout:,}発獲得")
+        return chain_count, chain_payout
+
+    print("=" * 60)
+    print(f"【リアルプレイモード】{spec.name}")
+    print(f"条件: 1k{rotation_per_1k}回転 / {total_rotations}回転")
+    print("=" * 60)
+    print()
+
+    while rotations < total_rotations:
+        spins_to_hit = 0
+        charge_bousou = False
+
+        # 通常状態：当たりを引くまで回す
+        while rotations < total_rotations:
+            rotations += 1
+            spins_to_hit += 1
+            consume_balls(balls_per_spin)
+
+            # 回転数表示更新（通常時は高速）
+            if rotations % 50 == 0 or (not fast_mode and rotations % 10 == 0):
+                show_status("通常")
+                wait(0.005)
+
+            # エヴァチャージチェック
+            if spec.charge_prob > 0 and np.random.random() < spec.charge_prob:
+                my_balls += spec.charge_payout
+                print(f"\n  ⚡ エヴァチャージ発動！ +{spec.charge_payout}発")
+                if np.random.random() < spec.charge_st_rate:
+                    charge_bousou = True
+                    print("  🔥🔥🔥 暴走モード！ST突入！ 🔥🔥🔥")
+                    wait(0.5)
+                    break
+
+            # 当たり判定
+            if np.random.random() < spec.hit_prob:
+                break
+
+        # 規定回転に達した場合
+        if rotations >= total_rotations and not charge_bousou:
+            if np.random.random() >= spec.hit_prob:
+                break
+
+        hit_count += 1
+
+        # 大当たり処理
+        if charge_bousou:
+            # 暴走からのST
+            first_payout = spec.charge_payout
+            st_entered = True
+            print(f"\n\n{'='*50}")
+            print(f"  🎰 【当たり{hit_count}】{spins_to_hit}回転目 - エヴァチャージ暴走！")
+        else:
+            # 通常の初当たり
+            first_payout, st_entered = get_heso_payout(spec)
+            my_balls += first_payout
+            print(f"\n\n{'='*50}")
+            print(f"  🎰 【当たり{hit_count}】{spins_to_hit}回転目で大当り！")
+            print(f"  初当たり出玉: {first_payout:,}発")
+
+        wait(0.3)
+
+        # ST/時短判定
+        if st_entered:
+            chain_count, chain_payout = run_st_loop(first_payout)
+        else:
+            chain_count = 1
+            print(f"  → 単発終了（時短{spec.jitan_spins_on_fail}回転へ）")
+
+        wait(0.2)
+
+        # 時短処理
+        jitan_spins = spec.jitan_spins_after_st if st_entered else spec.jitan_spins_on_fail
+
+        while jitan_spins > 0 and rotations < total_rotations:
+            jitan_spin_count = 0
+            hit_in_jitan = False
+
+            print(f"\n  【時短{jitan_spins}回転】")
+
+            while jitan_spin_count < jitan_spins and rotations < total_rotations:
+                rotations += 1
+                jitan_spin_count += 1
+                consume_balls(balls_per_spin_jitan)
+
+                if jitan_spin_count % 20 == 0:
+                    show_status(f"時短 {jitan_spin_count}/{jitan_spins}")
+                    wait(0.02)
+
+                if np.random.random() < spec.hit_prob:
+                    hit_in_jitan = True
+                    break
+
+            if not hit_in_jitan:
+                # 残保留チェック
+                print(f"\n  時短終了... 残保留チェック（{spec.zanho_count}個）")
+                wait(0.2)
+
+                zanho_hit = False
+                for i in range(spec.zanho_count):
+                    if np.random.random() < spec.hit_prob:
+                        zanho_hit = True
+                        print(f"  ✨ 残保留{i+1}個目で当たり！")
+                        break
+
+                if zanho_hit:
+                    hit_count += 1
+                    payout = get_denchu_payout(spec)
+                    my_balls += payout
+                    print(f"\n  🎰 【当たり{hit_count}】残保留当たり！ +{payout:,}発")
+
+                    zanho_st = np.random.random() < spec.zanho_st_rate
+                    if zanho_st:
+                        chain_count, chain_payout = run_st_loop(payout)
+                        jitan_spins = spec.jitan_spins_after_st
+                        continue
+
+                # 通常状態に戻る
+                print(f"  → 通常状態へ")
+                break
+
+            # 時短引き戻し
+            hit_count += 1
+            payout = get_denchu_payout(spec)
+            my_balls += payout
+            print(f"\n  🎰 【当たり{hit_count}】時短{jitan_spin_count}回転目で引き戻し！ +{payout:,}発")
+
+            chain_count, chain_payout = run_st_loop(payout)
+            jitan_spins = spec.jitan_spins_after_st
+
+        print(f"{'='*50}")
+        wait(0.3)
+
+    # 最終結果
+    profit = int(my_balls * 4) - total_investment
+
+    print(f"\n\n{'#'*60}")
+    print(f"【最終結果】")
+    print(f"{'#'*60}")
+    print(f"  総回転数: {rotations:,}回転")
+    print(f"  総当たり: {hit_count}回")
+    print(f"  持ち玉:   {int(my_balls):,}発")
+    print(f"  投資:     {total_investment:,}円")
+    print(f"  収支:     {profit:+,}円")
+    print(f"{'#'*60}")
+
+
 def compare_machines(rotation_per_1k: float, total_rotations: int = 2000, num_sims: int = 50000):
     """エヴァ15とエヴァ17を比較"""
     print("=" * 60)
@@ -615,9 +846,20 @@ def main():
                         help="当たり履歴を強制表示")
     parser.add_argument("--no-detail", action="store_true",
                         help="当たり履歴を非表示")
+    # リアルプレイモード
+    parser.add_argument("--play", action="store_true",
+                        help="リアルプレイモード（回転数カウントアップ表示）")
+    parser.add_argument("--fast", action="store_true",
+                        help="高速モード（--playと併用）")
 
     args = parser.parse_args()
-    
+
+    # リアルプレイモード優先
+    if args.play:
+        spec = EVA15 if args.machine == "eva15" else EVA17
+        play_realtime_session(spec, args.spins, args.rotation, fast_mode=args.fast)
+        return
+
     if args.mode == "compare":
         compare_machines(args.rotation, args.spins, args.sims)
     elif args.mode == "hamari":

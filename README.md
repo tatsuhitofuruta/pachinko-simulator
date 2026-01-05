@@ -8,6 +8,7 @@
 - 📊 **機種比較**: エヴァ15 vs エヴァ17の比較
 - 📈 **ハマり確率**: 各回転数でのハマり確率を計算
 - ⏱️ **勝率収束**: 期待勝率に収束するまでの必要回転数を計算
+- 🕹️ **リアルプレイモード**: 実際に打っているような体験をシミュレート
 
 ## インストール
 
@@ -60,6 +61,28 @@ python eva_simulator.py --mode single --sims 100 --detail
 python eva_simulator.py --mode single --sims 5 --no-detail
 ```
 
+### リアルプレイモード
+
+実際にパチンコを打っているような体験をシミュレートします。
+
+```bash
+# 通常モード（演出付き）
+python eva_simulator.py --play
+
+# 高速モード
+python eva_simulator.py --play --fast
+
+# エヴァ17で実行
+python eva_simulator.py --play --machine eva17
+```
+
+**特徴:**
+- 回転数がリアルタイムでカウントアップ
+- 持ち玉・投資額・収支をリアルタイム表示
+- ST中は何回転目で当たったか表示
+- 持ち玉優先消費（持ち玉がなくなってから追加投資）
+- エヴァチャージ・暴走モード・時短引き戻しに対応
+
 ## オプション
 
 | オプション | 説明 | デフォルト |
@@ -71,6 +94,8 @@ python eva_simulator.py --mode single --sims 5 --no-detail
 | `--machine` | 機種 (eva15/eva17) | eva15 |
 | `--detail` / `-d` | 当たり履歴を強制表示 | - |
 | `--no-detail` | 当たり履歴を非表示 | - |
+| `--play` | リアルプレイモードで実行 | - |
+| `--fast` | 高速モード（`--play`と併用） | - |
 
 ※ 当たり履歴は `--sims` が10以下の場合に自動表示されます
 
