@@ -393,7 +393,11 @@ def main():
                         help="シミュレーション回数")
     parser.add_argument("--machine", choices=["eva15", "eva17"], default="eva15",
                         help="機種（singleモード用）")
-    
+    parser.add_argument("--detail", "-d", action="store_true",
+                        help="当たり履歴を強制表示")
+    parser.add_argument("--no-detail", action="store_true",
+                        help="当たり履歴を非表示")
+
     args = parser.parse_args()
     
     if args.mode == "compare":
@@ -406,8 +410,9 @@ def main():
         spec = EVA15 if args.machine == "eva15" else EVA17
         results = run_simulation(spec, args.spins, args.rotation, args.sims)
         print_statistics(results, spec.name)
-        # 少数シミュレーションの場合は当たり履歴も表示
-        if args.sims <= 10:
+        # 当たり履歴表示: --detail で強制表示、--no-detail で非表示、それ以外は10以下で自動表示
+        show_detail = args.detail or (args.sims <= 10 and not args.no_detail)
+        if show_detail:
             print_session_details(results, spec)
 
 
