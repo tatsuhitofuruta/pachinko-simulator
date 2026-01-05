@@ -20,6 +20,8 @@ class ChainDetail:
     first_hit_payout: int       # 初当たり出玉
     st_payouts: List[int]       # ST中の各当たり出玉リスト
     total_payout: int           # 合計出玉
+    is_jitan_hit: bool = False  # 時短引き戻しかどうか
+    jitan_hit_rotation: int = 0 # 時短中何回転目で当たったか
 
 
 @dataclass
@@ -44,6 +46,10 @@ class MachineSpec:
     st_hit_payout: int       # ST中大当り出玉
     border_touka: float      # 等価ボーダー（1k回転数）
     first_hit_payouts: List[Tuple[float, int]] = None  # [(確率, 出玉), ...]
+    # 時短関連
+    jitan_spins_on_fail: int = 0      # ST非突入時の時短回転数
+    jitan_spins_after_st: int = 0     # ST終了後の時短回転数
+    jitan_rotation_per_1k: float = 30.0  # 時短中の1kあたり回転数（電サポ効率）
 
 
 # 機種スペック定義
@@ -54,7 +60,10 @@ EVA15 = MachineSpec(
     st_continue_rate=0.81,
     st_hit_payout=1500,
     border_touka=17.0,
-    first_hit_payouts=[(0.03, 1500), (0.97, 450)]  # 3%で1500発、97%で450発
+    first_hit_payouts=[(0.03, 1500), (0.97, 450)],  # 3%で1500発、97%で450発
+    jitan_spins_on_fail=100,   # ST非突入時：時短100回転
+    jitan_spins_after_st=0,    # ST終了後：時短なし
+    jitan_rotation_per_1k=30.0  # 時短中は1k30回転
 )
 
 EVA17 = MachineSpec(
@@ -64,7 +73,10 @@ EVA17 = MachineSpec(
     st_continue_rate=0.80,
     st_hit_payout=2400,
     border_touka=16.8,
-    first_hit_payouts=[(0.005, 1500), (0.995, 300)]  # 0.5%で1500発、99.5%で300発
+    first_hit_payouts=[(0.005, 1500), (0.995, 300)],  # 0.5%で1500発、99.5%で300発
+    jitan_spins_on_fail=100,   # ST非突入時：時短100回転
+    jitan_spins_after_st=0,    # ST終了後：時短なし
+    jitan_rotation_per_1k=30.0  # 時短中は1k30回転
 )
 
 
@@ -86,7 +98,7 @@ def simulate_session(
     balls_per_1k: int = 250
 ) -> SessionResult:
     """
-    1回の稼働をシミュレート
+    1回の稼働をシミュレート（時短引き戻し対応）
 
     Args:
         spec: 機種スペック
@@ -109,14 +121,14 @@ def simulate_session(
     while rotations < total_rotations:
         spins_to_hit = 0
 
-        # 当たりを引くまで回す
+        # 当たりを引くまで回す（通常状態）
         while rotations < total_rotations:
             rotations += 1
             spins_to_hit += 1
             if np.random.random() < spec.hit_prob:
                 break
 
-        # 投資玉数を計算
+        # 投資玉数を計算（通常状態）
         investment_balls += spins_to_hit / rotation_per_1k * balls_per_1k
 
         # 規定回転数に達して当たらなかった場合は終了
@@ -134,13 +146,16 @@ def simulate_session(
 
         # ST突入判定 & 連チャン
         chain_count = 1  # 初当たりを1連とカウント
-        if np.random.random() < spec.st_entry_rate:
+        st_entered = np.random.random() < spec.st_entry_rate
+
+        if st_entered:
             # ST継続ループ
             while np.random.random() < spec.st_continue_rate:
                 total_payout += spec.st_hit_payout
                 chain_payout += spec.st_hit_payout
                 st_payouts.append(spec.st_hit_payout)
                 chain_count += 1
+
         chains.append(chain_count)
 
         # 連チャン詳細を記録
@@ -149,8 +164,65 @@ def simulate_session(
             chain_count=chain_count,
             first_hit_payout=first_hit_payout,
             st_payouts=st_payouts,
-            total_payout=chain_payout
+            total_payout=chain_payout,
+            is_jitan_hit=False,
+            jitan_hit_rotation=0
         ))
+
+        # 時短処理
+        jitan_spins = spec.jitan_spins_after_st if st_entered else spec.jitan_spins_on_fail
+
+        while jitan_spins > 0 and rotations < total_rotations:
+            # 時短中に当たりを引くまで回す
+            jitan_spin_count = 0
+            hit_in_jitan = False
+
+            while jitan_spin_count < jitan_spins and rotations < total_rotations:
+                rotations += 1
+                jitan_spin_count += 1
+                if np.random.random() < spec.hit_prob:
+                    hit_in_jitan = True
+                    break
+
+            # 時短中の投資（電サポで玉減り少ない）
+            investment_balls += jitan_spin_count / spec.jitan_rotation_per_1k * balls_per_1k
+
+            if not hit_in_jitan:
+                # 時短スルー → 通常状態に戻る
+                break
+
+            # 時短中に当たり（引き戻し）
+            hit_rotations.append(jitan_spin_count)
+            first_hit_payout = get_first_hit_payout(spec)
+            total_payout += first_hit_payout
+            chain_payout = first_hit_payout
+            st_payouts = []
+            chain_count = 1
+
+            # 再度ST突入判定
+            st_entered = np.random.random() < spec.st_entry_rate
+
+            if st_entered:
+                while np.random.random() < spec.st_continue_rate:
+                    total_payout += spec.st_hit_payout
+                    chain_payout += spec.st_hit_payout
+                    st_payouts.append(spec.st_hit_payout)
+                    chain_count += 1
+
+            chains.append(chain_count)
+
+            chain_details.append(ChainDetail(
+                first_hit_rotation=jitan_spin_count,
+                chain_count=chain_count,
+                first_hit_payout=first_hit_payout,
+                st_payouts=st_payouts,
+                total_payout=chain_payout,
+                is_jitan_hit=True,
+                jitan_hit_rotation=jitan_spin_count
+            ))
+
+            # 次の時短回転数を設定
+            jitan_spins = spec.jitan_spins_after_st if st_entered else spec.jitan_spins_on_fail
 
     # 収支計算（等価4円）
     profit = (total_payout - investment_balls) * 4
@@ -290,8 +362,9 @@ def print_session_details(results: List[SessionResult], spec: MachineSpec):
             cumulative_rotation += chain.first_hit_rotation
             total_payout += chain.total_payout
 
-            # 初当たり情報
-            print(f"\n  ▶ 当たり{j}: {chain.first_hit_rotation}回転目 (累計{cumulative_rotation}回転)")
+            # 初当たり情報（時短引き戻しかどうかを表示）
+            jitan_label = "【時短引戻】" if chain.is_jitan_hit else ""
+            print(f"\n  ▶ 当たり{j}: {chain.first_hit_rotation}回転目 (累計{cumulative_rotation}回転) {jitan_label}")
             print(f"    初当たり: {chain.first_hit_payout:,}発", end="")
 
             # ST突入・連チャン情報
