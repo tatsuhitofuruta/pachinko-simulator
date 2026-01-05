@@ -41,14 +41,18 @@ class MachineSpec:
     """パチンコ機種スペック"""
     name: str
     hit_prob: float          # 大当り確率（例: 1/319.7 → 0.003128）
-    st_entry_rate: float     # ST突入率
-    st_continue_rate: float  # ST継続率
-    st_hit_payout: int       # ST中大当り出玉
+    st_hit_prob: float       # ST中大当り確率
     border_touka: float      # 等価ボーダー（1k回転数）
-    first_hit_payouts: List[Tuple[float, int]] = None  # [(確率, 出玉), ...]
+    # ヘソ入賞時（特図1）振り分け: [(確率, 出玉, ST突入フラグ), ...]
+    heso_payouts: List[Tuple[float, int, bool]] = None
+    # 電チュー入賞時（特図2）振り分け: [(確率, 出玉), ...]
+    denchu_payouts: List[Tuple[float, int]] = None
+    # ST関連
+    st_spins: int = 163              # ST回転数
+    st_continue_rate: float = 0.81  # ST継続率
     # 時短関連
-    jitan_spins_on_fail: int = 0      # ST非突入時の時短回転数
-    jitan_spins_after_st: int = 0     # ST終了後の時短回転数
+    jitan_spins_on_fail: int = 100   # ST非突入時の時短回転数
+    jitan_spins_after_st: int = 0    # ST終了後の時短回転数
     jitan_rotation_per_1k: float = 30.0  # 時短中の1kあたり回転数（電サポ効率）
 
 
@@ -56,39 +60,67 @@ class MachineSpec:
 EVA15 = MachineSpec(
     name="エヴァ15（未来への咆哮）",
     hit_prob=1 / 319.7,
-    st_entry_rate=0.70,
-    st_continue_rate=0.81,
-    st_hit_payout=1500,
+    st_hit_prob=1 / 99.4,
     border_touka=17.0,
-    first_hit_payouts=[(0.03, 1500), (0.97, 450)],  # 3%で1500発、97%で450発
-    jitan_spins_on_fail=100,   # ST非突入時：時短100回転
-    jitan_spins_after_st=0,    # ST終了後：時短なし
-    jitan_rotation_per_1k=30.0  # 時短中は1k30回転
+    # ヘソ: 10R確変(3%), 3R確変(56%), 3R通常(41%)
+    heso_payouts=[
+        (0.03, 1500, True),   # 10R確変 → ST
+        (0.56, 450, True),    # 3R確変 → ST
+        (0.41, 450, False),   # 3R通常 → 時短
+    ],
+    # 電チュー: 10R確変(100%)
+    denchu_payouts=[(1.0, 1500)],
+    st_spins=163,
+    st_continue_rate=0.81,
+    jitan_spins_on_fail=100,
+    jitan_spins_after_st=0,
+    jitan_rotation_per_1k=30.0
 )
 
 EVA17 = MachineSpec(
     name="エヴァ17（はじまりの記憶）",
     hit_prob=1 / 399.9,
-    st_entry_rate=0.61,
-    st_continue_rate=0.80,
-    st_hit_payout=2400,
+    st_hit_prob=1 / 99.6,
     border_touka=16.8,
-    first_hit_payouts=[(0.005, 1500), (0.995, 300)],  # 0.5%で1500発、99.5%で300発
-    jitan_spins_on_fail=100,   # ST非突入時：時短100回転
-    jitan_spins_after_st=0,    # ST終了後：時短なし
-    jitan_rotation_per_1k=30.0  # 時短中は1k30回転
+    # ヘソ: 10R+ST(0.5%), 2R+時短(49.5%), 2R+ST(50%)
+    heso_payouts=[
+        (0.005, 1500, True),   # 10R → ST
+        (0.495, 300, False),   # 2R → 時短
+        (0.50, 300, True),     # 2R → ST
+    ],
+    # 電チュー: 8R×2(98%), 8R×4(2%) ※レア振り分け推定
+    denchu_payouts=[
+        (0.98, 2400),   # 8R×2
+        (0.02, 4800),   # 8R×4（レア）
+    ],
+    st_spins=157,
+    st_continue_rate=0.80,
+    jitan_spins_on_fail=100,
+    jitan_spins_after_st=0,
+    jitan_rotation_per_1k=30.0
 )
 
 
-def get_first_hit_payout(spec: MachineSpec) -> int:
-    """初当たり出玉を確率に基づいて決定"""
+def get_heso_payout(spec: MachineSpec) -> Tuple[int, bool]:
+    """ヘソ入賞時（特図1）の出玉とST突入を決定"""
     r = np.random.random()
     cumulative = 0.0
-    for prob, payout in spec.first_hit_payouts:
+    for prob, payout, st_flag in spec.heso_payouts:
+        cumulative += prob
+        if r < cumulative:
+            return payout, st_flag
+    return spec.heso_payouts[-1][1], spec.heso_payouts[-1][2]
+
+
+def get_denchu_payout(spec: MachineSpec) -> int:
+    """電チュー入賞時（特図2）の出玉を決定"""
+    r = np.random.random()
+    cumulative = 0.0
+    for prob, payout in spec.denchu_payouts:
         cumulative += prob
         if r < cumulative:
             return payout
-    return spec.first_hit_payouts[-1][1]
+    return spec.denchu_payouts[-1][1]
 
 
 def simulate_session(
@@ -98,7 +130,7 @@ def simulate_session(
     balls_per_1k: int = 250
 ) -> SessionResult:
     """
-    1回の稼働をシミュレート（時短引き戻し対応）
+    1回の稼働をシミュレート（ラウンド振り分け・時短引き戻し対応）
 
     Args:
         spec: 機種スペック
@@ -138,22 +170,22 @@ def simulate_session(
         # 初当たり記録
         hit_rotations.append(spins_to_hit)
 
-        # 初当たり出玉獲得（確率分岐）
-        first_hit_payout = get_first_hit_payout(spec)
+        # ヘソ入賞時（特図1）の振り分け
+        first_hit_payout, st_entered = get_heso_payout(spec)
         total_payout += first_hit_payout
         chain_payout = first_hit_payout
         st_payouts: List[int] = []
 
-        # ST突入判定 & 連チャン
+        # ST突入 & 連チャン
         chain_count = 1  # 初当たりを1連とカウント
-        st_entered = np.random.random() < spec.st_entry_rate
 
         if st_entered:
-            # ST継続ループ
+            # ST継続ループ（電チュー入賞の振り分けを使用）
             while np.random.random() < spec.st_continue_rate:
-                total_payout += spec.st_hit_payout
-                chain_payout += spec.st_hit_payout
-                st_payouts.append(spec.st_hit_payout)
+                denchu_payout = get_denchu_payout(spec)
+                total_payout += denchu_payout
+                chain_payout += denchu_payout
+                st_payouts.append(denchu_payout)
                 chain_count += 1
 
         chains.append(chain_count)
@@ -191,23 +223,22 @@ def simulate_session(
                 # 時短スルー → 通常状態に戻る
                 break
 
-            # 時短中に当たり（引き戻し）
+            # 時短中に当たり（引き戻し）→ 電チューなのでST確定
             hit_rotations.append(jitan_spin_count)
-            first_hit_payout = get_first_hit_payout(spec)
+            first_hit_payout = get_denchu_payout(spec)  # 時短中は電チュー振り分け
             total_payout += first_hit_payout
             chain_payout = first_hit_payout
             st_payouts = []
             chain_count = 1
+            st_entered = True  # 時短引き戻しはST確定
 
-            # 再度ST突入判定
-            st_entered = np.random.random() < spec.st_entry_rate
-
-            if st_entered:
-                while np.random.random() < spec.st_continue_rate:
-                    total_payout += spec.st_hit_payout
-                    chain_payout += spec.st_hit_payout
-                    st_payouts.append(spec.st_hit_payout)
-                    chain_count += 1
+            # ST継続ループ
+            while np.random.random() < spec.st_continue_rate:
+                denchu_payout = get_denchu_payout(spec)
+                total_payout += denchu_payout
+                chain_payout += denchu_payout
+                st_payouts.append(denchu_payout)
+                chain_count += 1
 
             chains.append(chain_count)
 
