@@ -537,7 +537,8 @@
                 if (stEntered) {
                     // ST/LT処理
                     const stLabel = spec.isLT ? 'LT' : 'ST';
-                    addLog(`>>> ${stLabel}突入！（${spec.stSpins}回転）`, 'log-st');
+                    const entryMsg = spec.isLT ? 'LTチャレンジ' : 'ST突入';
+                    addLog(`>>> ${entryMsg}！（${spec.stSpins}回転）`, 'log-st');
                     setState(stLabel, `${spec.stSpins}回転`);
                     await sleep(baseDelay * 5);
 

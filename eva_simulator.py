@@ -126,17 +126,17 @@ EVA17 = MachineSpec(
 
 # 牙狼12 黄金騎士極限
 # LTシステム:
-#   初当たり1400発 → 50%単発 / 50%LT突入
+#   初当たり1400発 → 50%単発 / 50%LTチャレンジ
 #   LT中: 50%で7000発+継続 / 50%で1400発+転落
 GARO12 = MachineSpec(
     name="牙狼12（黄金騎士極限）",
     hit_prob=1 / 437.49,
     st_hit_prob=1.0,           # LT中は1回転で確定当たり
     border_touka=18.5,         # 等価ボーダー推定
-    # ヘソ: 初当たり1400発、50%でLT突入
+    # ヘソ: 初当たり1400発、50%でLTチャレンジ
     # ※出玉は実増え（15賞玉-1発=14発/カウント）
     heso_payouts=[
-        (0.50, 1400, True),    # 10R → LT突入
+        (0.50, 1400, True),    # 10R → LTチャレンジ
         (0.50, 1400, False),   # 10R → 単発終了
     ],
     # LT継続時: 必ず7000発（極限7500）
@@ -572,11 +572,11 @@ def print_session_details(results: List[SessionResult], spec: MachineSpec):
             print(f"    初当たり: {chain.first_hit_payout:,}発", end="")
 
             # ST突入・連チャン情報
-            # LT機種で転落出玉がある場合は即転落でもLT突入として扱う
+            # LT機種で転落出玉がある場合は即転落でもLTチャレンジとして扱う
             has_lt_end_payout = spec.lt_end_payout > 0 and len(chain.st_payouts) > 0
             if chain.chain_count > 1 or has_lt_end_payout:
-                st_label = "LT" if spec.lt_end_payout > 0 else "ST"
-                print(f" → {st_label}突入 → {chain.chain_count}連")
+                st_label = "LTチャレンジ" if spec.lt_end_payout > 0 else "ST突入"
+                print(f" → {st_label} → {chain.chain_count}連")
                 # LT転落時の出玉は最後に別表示
                 display_payouts = chain.st_payouts[:-1] if spec.lt_end_payout > 0 else chain.st_payouts
                 for k, st_payout in enumerate(display_payouts, 2):
@@ -654,7 +654,8 @@ def play_realtime_session(
         # LT機種判定（1回転確定 & 転落出玉あり）
         is_lt_machine = spec.lt_end_payout > 0
         st_label = "LT" if is_lt_machine else "ST"
-        print(f"  >>> {st_label}突入！（{spec.st_spins}回転）")
+        entry_msg = "LTチャレンジ" if is_lt_machine else "ST突入"
+        print(f"  >>> {entry_msg}！（{spec.st_spins}回転）")
         wait(0.8)
 
         # ST/LT継続ループ
