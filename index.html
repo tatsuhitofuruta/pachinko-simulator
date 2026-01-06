@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>エヴァ パチンコシミュレーター</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Hiragino Kaku Gothic ProN', 'メイリオ', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #ff6b6b;
+            text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .controls {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .control-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            flex: 1;
+            min-width: 120px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+            font-size: 14px;
+        }
+        select, input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            font-size: 16px;
+        }
+        select option {
+            background: #1a1a2e;
+        }
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-start {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+            color: white;
+        }
+        .btn-start:hover {
+            transform: scale(1.02);
+            box-shadow: 0 5px 20px rgba(255, 107, 107, 0.4);
+        }
+        .btn-start:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .display {
+            background: #000;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .status-line {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #0f0;
+            margin-bottom: 10px;
+        }
+        .rotation-display {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(255,255,255,0.5);
+        }
+        .rotation-label {
+            text-align: center;
+            color: #888;
+            margin-top: 5px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .stat-box {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+        }
+        .profit-plus { color: #4ecdc4; }
+        .profit-minus { color: #ff6b6b; }
+        .log {
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .log-hit {
+            color: #ffd93d;
+            font-weight: bold;
+        }
+        .log-st {
+            color: #ff6b6b;
+        }
+        .log-chain {
+            color: #4ecdc4;
+            padding-left: 20px;
+        }
+        .log-jitan {
+            color: #a855f7;
+        }
+        .log-charge {
+            color: #f59e0b;
+        }
+        .state-normal { color: #4ecdc4; }
+        .state-st { color: #ff6b6b; }
+        .state-jitan { color: #a855f7; }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .speed-control input[type="range"] {
+            flex: 1;
+        }
+        .final-result {
+            background: linear-gradient(135deg, #2d2d44, #1a1a2e);
+            border: 2px solid #ff6b6b;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            display: none;
+        }
+        .final-result h2 {
+            color: #ff6b6b;
+            margin-bottom: 20px;
+        }
+        .final-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        .final-stat {
+            padding: 10px;
+        }
+        .final-stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .final-stat-label {
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎰 エヴァ パチンコシミュレーター</h1>
+        <p class="subtitle">リアルプレイモード</p>
+
+        <div class="controls">
+            <div class="control-row">
+                <div class="control-group">
+                    <label>機種</label>
+                    <select id="machine">
+                        <option value="eva15">エヴァ15（未来への咆哮）</option>
+                        <option value="eva17">エヴァ17（はじまりの記憶）</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>総回転数</label>
+                    <select id="totalSpins">
+                        <option value="500">500回転</option>
+                        <option value="1000">1000回転</option>
+                        <option value="2000" selected>2000回転</option>
+                        <option value="3000">3000回転</option>
+                    </select>
+                </div>
+            </div>
+            <div class="control-row">
+                <div class="control-group">
+                    <label>千円回転数</label>
+                    <select id="rotation1k">
+                        <option value="16">16回転</option>
+                        <option value="17">17回転</option>
+                        <option value="18" selected>18回転</option>
+                        <option value="19">19回転</option>
+                        <option value="20">20回転</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>速度</label>
+                    <div class="speed-control">
+                        <input type="range" id="speed" min="1" max="10" value="5">
+                        <span id="speedLabel">5</span>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-start" id="startBtn" onclick="startSimulation()">
+                シミュレーション開始
+            </button>
+        </div>
+
+        <div class="display">
+            <div class="rotation-display" id="rotationDisplay">0</div>
+            <div class="rotation-label">回転</div>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-value" id="ballsDisplay">0</div>
+                    <div class="stat-label">持ち玉</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="investDisplay">0</div>
+                    <div class="stat-label">投資(円)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value profit-minus" id="profitDisplay">0</div>
+                    <div class="stat-label">収支(円)</div>
+                </div>
+            </div>
+            <div class="status-line">
+                状態: <span id="stateDisplay" class="state-normal">待機中</span>
+            </div>
+        </div>
+
+        <div class="log" id="log"></div>
+
+        <div class="final-result" id="finalResult">
+            <h2>🎰 最終結果</h2>
+            <div class="final-stats">
+                <div class="final-stat">
+                    <div class="final-stat-value" id="finalSpins">0</div>
+                    <div class="final-stat-label">総回転数</div>
+                </div>
+                <div class="final-stat">
+                    <div class="final-stat-value" id="finalHits">0</div>
+                    <div class="final-stat-label">総当たり</div>
+                </div>
+                <div class="final-stat">
+                    <div class="final-stat-value" id="finalBalls">0</div>
+                    <div class="final-stat-label">持ち玉</div>
+                </div>
+                <div class="final-stat">
+                    <div class="final-stat-value" id="finalProfit">0</div>
+                    <div class="final-stat-label">収支</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 機種スペック
+        const SPECS = {
+            eva15: {
+                name: "エヴァ15（未来への咆哮）",
+                hitProb: 1 / 319.7,
+                stHitProb: 1 / 99.4,
+                hesoPayouts: [
+                    { prob: 0.03, payout: 1400, st: true },
+                    { prob: 0.56, payout: 420, st: true },
+                    { prob: 0.41, payout: 420, st: false }
+                ],
+                denchuPayout: 1400,
+                stSpins: 163,
+                jitanSpins: 100,
+                jitanRotation1k: 30,
+                zanhoCount: 4,
+                chargeProb: 0,
+                chargePayout: 0,
+                chargeStRate: 0
+            },
+            eva17: {
+                name: "エヴァ17（はじまりの記憶）",
+                hitProb: 1 / 399.9,
+                stHitProb: 1 / 99.6,
+                hesoPayouts: [
+                    { prob: 0.005, payout: 1400, st: true },
+                    { prob: 0.495, payout: 280, st: false },
+                    { prob: 0.50, payout: 280, st: true }
+                ],
+                denchuPayout: 2240,
+                stSpins: 157,
+                jitanSpins: 100,
+                jitanRotation1k: 30,
+                zanhoCount: 0,
+                chargeProb: 1 / 2750.9,
+                chargePayout: 280,
+                chargeStRate: 0.02
+            }
+        };
+
+        let isRunning = false;
+        let shouldStop = false;
+
+        // UI更新
+        function updateDisplay(rotations, balls, investment) {
+            document.getElementById('rotationDisplay').textContent = rotations.toLocaleString();
+            document.getElementById('ballsDisplay').textContent = Math.floor(balls).toLocaleString();
+            document.getElementById('investDisplay').textContent = investment.toLocaleString();
+
+            const profit = Math.floor(balls * 4) - investment;
+            const profitEl = document.getElementById('profitDisplay');
+            profitEl.textContent = (profit >= 0 ? '+' : '') + profit.toLocaleString();
+            profitEl.className = 'stat-value ' + (profit >= 0 ? 'profit-plus' : 'profit-minus');
+        }
+
+        function setState(state, extra = '') {
+            const el = document.getElementById('stateDisplay');
+            let text = state;
+            let className = 'state-normal';
+
+            if (state === '通常') {
+                className = 'state-normal';
+            } else if (state === 'ST') {
+                className = 'state-st';
+                text = `ST ${extra}`;
+            } else if (state === '時短') {
+                className = 'state-jitan';
+                text = `時短 ${extra}`;
+            }
+
+            el.textContent = text;
+            el.className = className;
+        }
+
+        function addLog(message, className = '') {
+            const log = document.getElementById('log');
+            const div = document.createElement('div');
+            div.textContent = message;
+            if (className) div.className = className;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function getHesoResult(spec) {
+            const r = Math.random();
+            let cumulative = 0;
+            for (const p of spec.hesoPayouts) {
+                cumulative += p.prob;
+                if (r < cumulative) {
+                    return { payout: p.payout, st: p.st };
+                }
+            }
+            const last = spec.hesoPayouts[spec.hesoPayouts.length - 1];
+            return { payout: last.payout, st: last.st };
+        }
+
+        async function startSimulation() {
+            if (isRunning) {
+                shouldStop = true;
+                return;
+            }
+
+            isRunning = true;
+            shouldStop = false;
+
+            const btn = document.getElementById('startBtn');
+            btn.textContent = '停止';
+            btn.style.background = 'linear-gradient(135deg, #666, #444)';
+
+            const machineKey = document.getElementById('machine').value;
+            const spec = SPECS[machineKey];
+            const totalSpins = parseInt(document.getElementById('totalSpins').value);
+            const rotation1k = parseInt(document.getElementById('rotation1k').value);
+            const speedValue = parseInt(document.getElementById('speed').value);
+
+            const ballsPer1k = 250;
+            const ballsPerSpin = ballsPer1k / rotation1k;
+            const ballsPerSpinJitan = ballsPer1k / spec.jitanRotation1k;
+
+            // 速度設定（値が大きいほど速い）
+            const baseDelay = Math.max(5, 100 - speedValue * 10);
+
+            clearLog();
+            document.getElementById('finalResult').style.display = 'none';
+            addLog(`【${spec.name}】シミュレーション開始`);
+            addLog(`条件: 1k${rotation1k}回転 / ${totalSpins}回転`);
+            addLog('─'.repeat(30));
+
+            let rotations = 0;
+            let myBalls = 0;
+            let totalInvestment = 0;
+            let hitCount = 0;
+
+            function consumeBalls(amount) {
+                if (myBalls >= amount) {
+                    myBalls -= amount;
+                } else {
+                    const shortage = amount - myBalls;
+                    myBalls = 0;
+                    const investUnits = Math.ceil(shortage / ballsPer1k);
+                    totalInvestment += investUnits * 1000;
+                    myBalls += investUnits * ballsPer1k - shortage;
+                }
+            }
+
+            // メインループ
+            while (rotations < totalSpins && !shouldStop) {
+                let spinsToHit = 0;
+                let chargeBousou = false;
+
+                // 通常状態
+                setState('通常');
+                while (rotations < totalSpins && !shouldStop) {
+                    rotations++;
+                    spinsToHit++;
+                    consumeBalls(ballsPerSpin);
+
+                    if (rotations % 10 === 0) {
+                        updateDisplay(rotations, myBalls, totalInvestment);
+                        await sleep(baseDelay / 5);
+                    }
+
+                    // エヴァチャージ
+                    if (spec.chargeProb > 0 && Math.random() < spec.chargeProb) {
+                        myBalls += spec.chargePayout;
+                        addLog(`⚡ エヴァチャージ！ +${spec.chargePayout}発`, 'log-charge');
+                        if (Math.random() < spec.chargeStRate) {
+                            chargeBousou = true;
+                            addLog('🔥🔥🔥 暴走モード！ST突入！ 🔥🔥🔥', 'log-charge');
+                            await sleep(baseDelay * 5);
+                            break;
+                        }
+                    }
+
+                    // 当たり判定
+                    if (Math.random() < spec.hitProb) {
+                        break;
+                    }
+                }
+
+                if (shouldStop || rotations >= totalSpins) break;
+
+                hitCount++;
+                updateDisplay(rotations, myBalls, totalInvestment);
+
+                // 初当たり処理
+                let firstPayout, stEntered;
+                if (chargeBousou) {
+                    firstPayout = spec.chargePayout;
+                    stEntered = true;
+                    addLog(`🎰【当たり${hitCount}】暴走からST突入！`, 'log-hit');
+                } else {
+                    const result = getHesoResult(spec);
+                    firstPayout = result.payout;
+                    stEntered = result.st;
+                    myBalls += firstPayout;
+                    addLog(`🎰【当たり${hitCount}】${spinsToHit}回転目 +${firstPayout.toLocaleString()}発`, 'log-hit');
+                }
+
+                await sleep(baseDelay * 3);
+
+                if (stEntered) {
+                    // ST処理
+                    addLog(`>>> ST突入！（${spec.stSpins}回転）`, 'log-st');
+                    setState('ST', `${spec.stSpins}回転`);
+                    await sleep(baseDelay * 5);
+
+                    let chainCount = 1;
+                    let chainPayout = firstPayout;
+
+                    while (!shouldStop) {
+                        let stSpin = 0;
+                        let hitInSt = false;
+
+                        for (stSpin = 1; stSpin <= spec.stSpins; stSpin++) {
+                            if (Math.random() < spec.stHitProb) {
+                                hitInSt = true;
+                                break;
+                            }
+                        }
+
+                        if (!hitInSt) break;
+
+                        chainCount++;
+                        const payout = spec.denchuPayout;
+                        myBalls += payout;
+                        chainPayout += payout;
+                        updateDisplay(rotations, myBalls, totalInvestment);
+                        addLog(`  ${chainCount}連目: ST${stSpin}回転 +${payout.toLocaleString()}発`, 'log-chain');
+                        await sleep(baseDelay * 4);
+                    }
+
+                    addLog(`ST終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                } else {
+                    // 時短処理
+                    addLog(`→ 単発終了（時短${spec.jitanSpins}回転へ）`, 'log-jitan');
+                    setState('時短', `0/${spec.jitanSpins}`);
+                    await sleep(baseDelay * 2);
+
+                    let jitanSpinCount = 0;
+                    let hitInJitan = false;
+
+                    while (jitanSpinCount < spec.jitanSpins && rotations < totalSpins && !shouldStop) {
+                        rotations++;
+                        jitanSpinCount++;
+                        consumeBalls(ballsPerSpinJitan);
+
+                        if (jitanSpinCount % 20 === 0) {
+                            updateDisplay(rotations, myBalls, totalInvestment);
+                            setState('時短', `${jitanSpinCount}/${spec.jitanSpins}`);
+                            await sleep(baseDelay / 3);
+                        }
+
+                        if (Math.random() < spec.hitProb) {
+                            hitInJitan = true;
+                            break;
+                        }
+                    }
+
+                    if (hitInJitan) {
+                        // 時短引き戻し
+                        hitCount++;
+                        const payout = spec.denchuPayout;
+                        myBalls += payout;
+                        addLog(`🎰【当たり${hitCount}】時短${jitanSpinCount}回転目で引き戻し！ +${payout.toLocaleString()}発`, 'log-hit');
+                        updateDisplay(rotations, myBalls, totalInvestment);
+                        await sleep(baseDelay * 3);
+
+                        // ST突入
+                        addLog(`>>> ST突入！（${spec.stSpins}回転）`, 'log-st');
+                        setState('ST', `${spec.stSpins}回転`);
+                        await sleep(baseDelay * 5);
+
+                        let chainCount = 1;
+                        let chainPayout = payout;
+
+                        while (!shouldStop) {
+                            let stSpin = 0;
+                            let hitInSt = false;
+
+                            for (stSpin = 1; stSpin <= spec.stSpins; stSpin++) {
+                                if (Math.random() < spec.stHitProb) {
+                                    hitInSt = true;
+                                    break;
+                                }
+                            }
+
+                            if (!hitInSt) break;
+
+                            chainCount++;
+                            const p = spec.denchuPayout;
+                            myBalls += p;
+                            chainPayout += p;
+                            updateDisplay(rotations, myBalls, totalInvestment);
+                            addLog(`  ${chainCount}連目: ST${stSpin}回転 +${p.toLocaleString()}発`, 'log-chain');
+                            await sleep(baseDelay * 4);
+                        }
+
+                        addLog(`ST終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                    } else {
+                        // 残保留チェック
+                        if (spec.zanhoCount > 0) {
+                            addLog(`時短終了... 残保留チェック（${spec.zanhoCount}個）`, 'log-jitan');
+                            await sleep(baseDelay * 2);
+
+                            let zanhoHit = false;
+                            for (let i = 0; i < spec.zanhoCount; i++) {
+                                if (Math.random() < spec.hitProb) {
+                                    zanhoHit = true;
+                                    hitCount++;
+                                    const payout = spec.denchuPayout;
+                                    myBalls += payout;
+                                    addLog(`✨ 残保留${i + 1}個目で当たり！ +${payout.toLocaleString()}発`, 'log-hit');
+                                    updateDisplay(rotations, myBalls, totalInvestment);
+
+                                    // ST処理
+                                    addLog(`>>> ST突入！（${spec.stSpins}回転）`, 'log-st');
+                                    setState('ST', `${spec.stSpins}回転`);
+                                    await sleep(baseDelay * 5);
+
+                                    let chainCount = 1;
+                                    let chainPayout = payout;
+
+                                    while (!shouldStop) {
+                                        let stSpin = 0;
+                                        let hitInSt = false;
+
+                                        for (stSpin = 1; stSpin <= spec.stSpins; stSpin++) {
+                                            if (Math.random() < spec.stHitProb) {
+                                                hitInSt = true;
+                                                break;
+                                            }
+                                        }
+
+                                        if (!hitInSt) break;
+
+                                        chainCount++;
+                                        const p = spec.denchuPayout;
+                                        myBalls += p;
+                                        chainPayout += p;
+                                        updateDisplay(rotations, myBalls, totalInvestment);
+                                        addLog(`  ${chainCount}連目: ST${stSpin}回転 +${p.toLocaleString()}発`, 'log-chain');
+                                        await sleep(baseDelay * 4);
+                                    }
+
+                                    addLog(`ST終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                                    break;
+                                }
+                            }
+
+                            if (!zanhoHit) {
+                                addLog(`→ 通常状態へ`, 'log-jitan');
+                            }
+                        } else {
+                            addLog(`時短終了 → 通常状態へ`, 'log-jitan');
+                        }
+                    }
+                }
+
+                await sleep(baseDelay * 2);
+            }
+
+            // 最終結果
+            updateDisplay(rotations, myBalls, totalInvestment);
+            const finalProfit = Math.floor(myBalls * 4) - totalInvestment;
+
+            addLog('─'.repeat(30));
+            addLog(`【最終結果】`);
+            addLog(`総回転数: ${rotations.toLocaleString()}回転`);
+            addLog(`総当たり: ${hitCount}回`);
+            addLog(`持ち玉: ${Math.floor(myBalls).toLocaleString()}発`);
+            addLog(`収支: ${(finalProfit >= 0 ? '+' : '')}${finalProfit.toLocaleString()}円`);
+
+            // 結果表示
+            document.getElementById('finalSpins').textContent = rotations.toLocaleString();
+            document.getElementById('finalHits').textContent = hitCount;
+            document.getElementById('finalBalls').textContent = Math.floor(myBalls).toLocaleString();
+            const finalProfitEl = document.getElementById('finalProfit');
+            finalProfitEl.textContent = (finalProfit >= 0 ? '+' : '') + finalProfit.toLocaleString() + '円';
+            finalProfitEl.className = 'final-stat-value ' + (finalProfit >= 0 ? 'profit-plus' : 'profit-minus');
+            document.getElementById('finalResult').style.display = 'block';
+
+            setState('終了');
+            btn.textContent = 'もう一度';
+            btn.style.background = 'linear-gradient(135deg, #ff6b6b, #ee5a5a)';
+            isRunning = false;
+        }
+
+        // 速度スライダー
+        document.getElementById('speed').addEventListener('input', (e) => {
+            document.getElementById('speedLabel').textContent = e.target.value;
+        });
+    </script>
+</body>
+</html>
