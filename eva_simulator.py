@@ -66,6 +66,8 @@ class MachineSpec:
     charge_prob: float = 0.0         # エヴァチャージ確率
     charge_payout: int = 300         # エヴァチャージ出玉
     charge_st_rate: float = 0.0      # エヴァチャージからのST突入率（暴走）
+    # LT(ラッキートリガー)用
+    lt_end_payout: int = 0           # LT転落時の出玉（牙狼等）
 
 
 # 機種スペック定義
@@ -120,6 +122,35 @@ EVA17 = MachineSpec(
     charge_prob=1 / 2750.9,    # エヴァチャージ確率
     charge_payout=280,         # 2R×10C×14発
     charge_st_rate=0.02,       # 2%で暴走（ST突入）
+)
+
+# 牙狼12 黄金騎士極限
+# LTシステム:
+#   初当たり1400発 → 50%単発 / 50%LT突入
+#   LT中: 50%で7000発+継続 / 50%で1400発+転落
+GARO12 = MachineSpec(
+    name="牙狼12（黄金騎士極限）",
+    hit_prob=1 / 437.49,
+    st_hit_prob=1.0,           # LT中は1回転で確定当たり
+    border_touka=18.5,         # 等価ボーダー推定
+    # ヘソ: 初当たり1400発、50%でLT突入
+    # ※出玉は実増え（15賞玉-1発=14発/カウント）
+    heso_payouts=[
+        (0.50, 1400, True),    # 10R → LT突入
+        (0.50, 1400, False),   # 10R → 単発終了
+    ],
+    # LT継続時: 必ず7000発（極限7500）
+    denchu_payouts=[
+        (1.0, 7000),           # 50R相当
+    ],
+    st_spins=1,                # 1回転確定（LT）
+    st_continue_rate=0.50,     # LT継続率50%（勝てば7000発）
+    jitan_spins_on_fail=0,     # 時短なし
+    jitan_spins_after_st=0,
+    jitan_rotation_per_1k=30.0,
+    zanho_count=0,             # 残保留なし
+    zanho_st_rate=0,
+    lt_end_payout=1400,        # LT転落時1400発
 )
 
 
@@ -253,6 +284,12 @@ def simulate_session(
                     st_payouts.append(denchu_payout)
                     chain_count += 1
 
+                # LT転落時出玉（牙狼等）
+                if spec.lt_end_payout > 0:
+                    total_payout += spec.lt_end_payout
+                    chain_payout += spec.lt_end_payout
+                    st_payouts.append(spec.lt_end_payout)
+
             chains.append(chain_count)
 
             # 連チャン詳細を記録
@@ -311,6 +348,12 @@ def simulate_session(
                             st_payouts.append(denchu_payout)
                             chain_count += 1
 
+                        # LT転落時出玉（牙狼等）
+                        if spec.lt_end_payout > 0:
+                            total_payout += spec.lt_end_payout
+                            chain_payout += spec.lt_end_payout
+                            st_payouts.append(spec.lt_end_payout)
+
                     chains.append(chain_count)
                     chain_details.append(ChainDetail(
                         first_hit_rotation=0,
@@ -347,6 +390,12 @@ def simulate_session(
                 chain_payout += denchu_payout
                 st_payouts.append(denchu_payout)
                 chain_count += 1
+
+            # LT転落時出玉（牙狼等）
+            if spec.lt_end_payout > 0:
+                total_payout += spec.lt_end_payout
+                chain_payout += spec.lt_end_payout
+                st_payouts.append(spec.lt_end_payout)
 
             chains.append(chain_count)
 
@@ -523,10 +572,18 @@ def print_session_details(results: List[SessionResult], spec: MachineSpec):
             print(f"    初当たり: {chain.first_hit_payout:,}発", end="")
 
             # ST突入・連チャン情報
-            if chain.chain_count > 1:
-                print(f" → ST突入 → {chain.chain_count}連")
-                for k, st_payout in enumerate(chain.st_payouts, 2):
+            # LT機種で転落出玉がある場合は即転落でもLT突入として扱う
+            has_lt_end_payout = spec.lt_end_payout > 0 and len(chain.st_payouts) > 0
+            if chain.chain_count > 1 or has_lt_end_payout:
+                st_label = "LT" if spec.lt_end_payout > 0 else "ST"
+                print(f" → {st_label}突入 → {chain.chain_count}連")
+                # LT転落時の出玉は最後に別表示
+                display_payouts = chain.st_payouts[:-1] if spec.lt_end_payout > 0 else chain.st_payouts
+                for k, st_payout in enumerate(display_payouts, 2):
                     print(f"      {k}連目: {st_payout:,}発")
+                # LT転落出玉を表示
+                if spec.lt_end_payout > 0 and chain.st_payouts:
+                    print(f"      LT転落: {chain.st_payouts[-1]:,}発")
             else:
                 print(" → ST非突入（単発）")
 
@@ -589,39 +646,51 @@ def play_realtime_session(
             time.sleep(sec)
 
     def run_st_loop(initial_payout: int) -> Tuple[int, int]:
-        """ST連チャンを回転数ベースでシミュレート。(連チャン数, 合計出玉)を返す"""
+        """ST/LT連チャンをシミュレート。(連チャン数, 合計出玉)を返す"""
         nonlocal my_balls
         chain_count = 1
         chain_payout = initial_payout
 
-        print(f"  >>> ST突入！（{spec.st_spins}回転）")
+        # LT機種判定（1回転確定 & 転落出玉あり）
+        is_lt_machine = spec.lt_end_payout > 0
+        st_label = "LT" if is_lt_machine else "ST"
+        print(f"  >>> {st_label}突入！（{spec.st_spins}回転）")
         wait(0.8)
 
-        # ST中ループ（回転数ベース）
+        # ST/LT継続ループ
         while True:
-            st_spin = 0
-            hit_in_st = False
-
-            # ST回転消化
-            for st_spin in range(1, spec.st_spins + 1):
-                if np.random.random() < spec.st_hit_prob:
-                    hit_in_st = True
+            if is_lt_machine:
+                # LT機種: st_continue_rateで継続判定
+                if np.random.random() >= spec.st_continue_rate:
+                    break
+                st_spin = 1
+            else:
+                # ST機種: 実際にST回転を消化して当たりを引く
+                st_spin = 0
+                hit_in_st = False
+                for st_spin in range(1, spec.st_spins + 1):
+                    if np.random.random() < spec.st_hit_prob:
+                        hit_in_st = True
+                        break
+                if not hit_in_st:
                     break
 
-            if not hit_in_st:
-                # STスルー（規定回転で当たらず）
-                break
-
-            # ST中当たり（ゆっくり表示）
+            # 継続当たり
             chain_count += 1
             payout = get_denchu_payout(spec)
             my_balls += payout
             chain_payout += payout
-            print(f"    {chain_count}連目: ST{st_spin}回転 +{payout:,}発 (計{chain_payout:,}発)")
+            print(f"    {chain_count}連目: {st_label}{st_spin}回転 +{payout:,}発 (計{chain_payout:,}発)")
             wait(0.6)
 
+        # ST/LT終了時
+        if spec.lt_end_payout > 0:
+            my_balls += spec.lt_end_payout
+            chain_payout += spec.lt_end_payout
+            print(f"    LT転落 → +{spec.lt_end_payout:,}発")
+
         wait(0.3)
-        print(f"  ST終了 → {chain_count}連チャン！ 合計{chain_payout:,}発獲得")
+        print(f"  {st_label}終了 → {chain_count}連チャン！ 合計{chain_payout:,}発獲得")
         return chain_count, chain_payout
 
     print("=" * 60)
@@ -848,7 +917,7 @@ def main():
                         help="総回転数")
     parser.add_argument("--sims", type=int, default=50000,
                         help="シミュレーション回数")
-    parser.add_argument("--machine", choices=["eva15", "eva17"], default="eva15",
+    parser.add_argument("--machine", choices=["eva15", "eva17", "garo12"], default="eva15",
                         help="機種（singleモード用）")
     parser.add_argument("--detail", "-d", action="store_true",
                         help="当たり履歴を強制表示")
@@ -862,9 +931,12 @@ def main():
 
     args = parser.parse_args()
 
+    # 機種選択
+    machines = {"eva15": EVA15, "eva17": EVA17, "garo12": GARO12}
+    spec = machines.get(args.machine, EVA15)
+
     # リアルプレイモード優先
     if args.play:
-        spec = EVA15 if args.machine == "eva15" else EVA17
         play_realtime_session(spec, args.spins, args.rotation, fast_mode=args.fast)
         return
 
@@ -875,7 +947,6 @@ def main():
     elif args.mode == "convergence":
         calculate_convergence()
     elif args.mode == "single":
-        spec = EVA15 if args.machine == "eva15" else EVA17
         results = run_simulation(spec, args.spins, args.rotation, args.sims)
         print_statistics(results, spec.name)
         # 当たり履歴表示: --detail で強制表示、--no-detail で非表示、それ以外は10以下で自動表示
