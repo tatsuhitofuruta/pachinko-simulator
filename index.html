@@ -364,8 +364,10 @@
                 chargePayout: 0,
                 chargeStRate: 0,
                 isLT: true,
-                ltEndPayout: 1400,
-                stContinueRate: 0.76  // LT継続率76%
+                ltChallengeRate: 0.50,  // LTチャレンジ成功率50%
+                ltFirstPayout: 7000,    // LT突入時7000発固定
+                ltEndPayout: 1400,      // LT転落時1400発
+                stContinueRate: 0.76    // LT継続率76%
             }
         };
 
@@ -557,52 +559,99 @@
                 if (stEntered) {
                     // ST/LT処理
                     const stLabel = spec.isLT ? 'LT' : 'ST';
-                    const entryMsg = spec.isLT ? 'LTチャレンジ' : 'ST突入';
-                    addLog(`>>> ${entryMsg}！（${spec.stSpins}回転）`, 'log-st');
-                    setState(stLabel, `${spec.stSpins}回転`);
-                    await sleep(baseDelay * 5);
-
+                    const isLtChallenge = spec.ltChallengeRate > 0;
                     let chainCount = 1;
                     let chainPayout = firstPayout;
 
-                    let stSpin = 1;  // ループ外で宣言
-                    while (!shouldStop) {
-                        if (spec.isLT) {
-                            // LT機種: st_continue_rateで継続判定
-                            if (Math.random() >= spec.stContinueRate) break;
-                            stSpin = 1;
+                    if (isLtChallenge) {
+                        // LTチャレンジ機種の場合
+                        addLog(`>>> LTチャレンジ！`, 'log-st');
+                        setState('LTチャレンジ');
+                        await sleep(baseDelay * 5);
+
+                        // LTチャレンジ判定
+                        if (Math.random() >= spec.ltChallengeRate) {
+                            // LTチャレンジ敗北
+                            myBalls += spec.ltEndPayout;
+                            chainPayout += spec.ltEndPayout;
+                            updateDisplay(rotations, myBalls, totalInvestment);
+                            addLog(`  LTチャレンジ敗北... +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
+                            await sleep(baseDelay * 3);
+                            addLog(`終了 → 1連 計${chainPayout.toLocaleString()}発`, 'log-st');
                         } else {
-                            // ST機種: 実際にST回転を消化して当たりを引く
-                            let hitInSt = false;
-                            for (stSpin = 1; stSpin <= spec.stSpins; stSpin++) {
-                                if (Math.random() < spec.stHitProb) {
-                                    hitInSt = true;
-                                    break;
-                                }
+                            // LTチャレンジ成功 → LT突入
+                            addLog(`🔥 LTチャレンジ成功！ LT突入！`, 'log-st');
+                            myBalls += spec.ltFirstPayout;
+                            chainPayout += spec.ltFirstPayout;
+                            chainCount++;
+                            updateDisplay(rotations, myBalls, totalInvestment);
+                            addLog(`  LT突入: +${spec.ltFirstPayout.toLocaleString()}発`, 'log-chain');
+                            await sleep(baseDelay * 4);
+                            setState('LT');
+
+                            // LT継続ループ
+                            while (!shouldStop && Math.random() < spec.stContinueRate) {
+                                chainCount++;
+                                const payout = getDenchuPayout(spec);
+                                myBalls += payout;
+                                chainPayout += payout;
+                                updateDisplay(rotations, myBalls, totalInvestment);
+                                addLog(`  ${chainCount}連目: LT継続 +${payout.toLocaleString()}発`, 'log-chain');
+                                await sleep(baseDelay * 4);
                             }
-                            if (!hitInSt) break;
+
+                            // LT転落
+                            myBalls += spec.ltEndPayout;
+                            chainPayout += spec.ltEndPayout;
+                            updateDisplay(rotations, myBalls, totalInvestment);
+                            addLog(`  LT転落 → +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
+                            await sleep(baseDelay * 2);
+                            addLog(`LT終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                        }
+                    } else {
+                        // 通常ST/LT機種
+                        const entryMsg = spec.isLT ? 'LTチャレンジ' : 'ST突入';
+                        addLog(`>>> ${entryMsg}！（${spec.stSpins}回転）`, 'log-st');
+                        setState(stLabel, `${spec.stSpins}回転`);
+                        await sleep(baseDelay * 5);
+
+                        let stSpin = 1;
+                        while (!shouldStop) {
+                            if (spec.isLT) {
+                                if (Math.random() >= spec.stContinueRate) break;
+                                stSpin = 1;
+                            } else {
+                                let hitInSt = false;
+                                for (stSpin = 1; stSpin <= spec.stSpins; stSpin++) {
+                                    if (Math.random() < spec.stHitProb) {
+                                        hitInSt = true;
+                                        break;
+                                    }
+                                }
+                                if (!hitInSt) break;
+                            }
+
+                            chainCount++;
+                            const payout = getDenchuPayout(spec);
+                            myBalls += payout;
+                            chainPayout += payout;
+                            updateDisplay(rotations, myBalls, totalInvestment);
+                            const spinText = spec.isLT ? `${stLabel}1回転` : `ST${stSpin}回転`;
+                            addLog(`  ${chainCount}連目: ${spinText} +${payout.toLocaleString()}発`, 'log-chain');
+                            await sleep(baseDelay * 4);
                         }
 
-                        chainCount++;
-                        const payout = getDenchuPayout(spec);
-                        myBalls += payout;
-                        chainPayout += payout;
-                        updateDisplay(rotations, myBalls, totalInvestment);
-                        const spinText = spec.isLT ? `${stLabel}1回転` : `ST${stSpin}回転`;
-                        addLog(`  ${chainCount}連目: ${spinText} +${payout.toLocaleString()}発`, 'log-chain');
-                        await sleep(baseDelay * 4);
-                    }
+                        // LT転落時出玉
+                        if (spec.ltEndPayout > 0) {
+                            myBalls += spec.ltEndPayout;
+                            chainPayout += spec.ltEndPayout;
+                            updateDisplay(rotations, myBalls, totalInvestment);
+                            addLog(`  LT転落 → +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
+                            await sleep(baseDelay * 2);
+                        }
 
-                    // LT転落時出玉
-                    if (spec.ltEndPayout > 0) {
-                        myBalls += spec.ltEndPayout;
-                        chainPayout += spec.ltEndPayout;
-                        updateDisplay(rotations, myBalls, totalInvestment);
-                        addLog(`  LT転落 → +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
-                        await sleep(baseDelay * 2);
+                        addLog(`${stLabel}終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
                     }
-
-                    addLog(`${stLabel}終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
                 } else {
                     // 時短処理
                     addLog(`→ 単発終了（時短${spec.jitanSpins}回転へ）`, 'log-jitan');

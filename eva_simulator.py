@@ -67,6 +67,8 @@ class MachineSpec:
     charge_payout: int = 300         # エヴァチャージ出玉
     charge_st_rate: float = 0.0      # エヴァチャージからのST突入率（暴走）
     # LT(ラッキートリガー)用
+    lt_challenge_rate: float = 0.0   # LTチャレンジ成功率（0なら通常ST）
+    lt_first_payout: int = 0         # LT突入時の初回出玉（固定）
     lt_end_payout: int = 0           # LT転落時の出玉（牙狼等）
 
 
@@ -127,8 +129,8 @@ EVA17 = MachineSpec(
 # 牙狼12 黄金騎士極限
 # LTシステム:
 #   初当たり1400発 → 50%単発 / 50%LTチャレンジ
-#   LT中: 25%で7000発+継続 / 51%で1400発+継続 / 24%で1400発+転落
-#   → 継続率76%、継続時の出玉振り分けあり
+#   LTチャレンジ: 50%成功で7000発固定 + LT突入
+#   LT継続中: 25%で7000発+継続 / 51%で1400発+継続 / 24%で1400発+転落
 GARO12 = MachineSpec(
     name="牙狼12（黄金騎士極限）",
     hit_prob=1 / 437.49,
@@ -137,7 +139,7 @@ GARO12 = MachineSpec(
     # ヘソ: 初当たり1400発、50%でLTチャレンジ
     # ※出玉は実増え（15賞玉-1発=14発/カウント）
     heso_payouts=[
-        (0.50, 1400, True),    # 10R → LTチャレンジ
+        (0.50, 1400, True),    # 10R → LTチャレンジ権利
         (0.50, 1400, False),   # 10R → 単発終了
     ],
     # LT継続時: 25%で7000発、51%で1400発（継続76%中の内訳）
@@ -152,6 +154,8 @@ GARO12 = MachineSpec(
     jitan_rotation_per_1k=30.0,
     zanho_count=0,             # 残保留なし
     zanho_st_rate=0,
+    lt_challenge_rate=0.50,    # LTチャレンジ成功率50%
+    lt_first_payout=7000,      # LT突入時7000発固定
     lt_end_payout=1400,        # LT転落時1400発
 )
 
@@ -278,19 +282,46 @@ def simulate_session(
             chain_count = 1  # 初当たりを1連とカウント
 
             if st_entered:
-                # ST継続ループ（電チュー入賞の振り分けを使用）
-                while np.random.random() < spec.st_continue_rate:
-                    denchu_payout = get_denchu_payout(spec)
-                    total_payout += denchu_payout
-                    chain_payout += denchu_payout
-                    st_payouts.append(denchu_payout)
-                    chain_count += 1
+                # LTチャレンジ判定（LT機種の場合）
+                if spec.lt_challenge_rate > 0:
+                    if np.random.random() >= spec.lt_challenge_rate:
+                        # LTチャレンジ失敗 → lt_end_payout を付与して終了
+                        total_payout += spec.lt_end_payout
+                        chain_payout += spec.lt_end_payout
+                        st_payouts.append(spec.lt_end_payout)
+                    else:
+                        # LTチャレンジ成功 → lt_first_payout（固定）+ LT継続ループ
+                        total_payout += spec.lt_first_payout
+                        chain_payout += spec.lt_first_payout
+                        st_payouts.append(spec.lt_first_payout)
+                        chain_count += 1
 
-                # LT転落時出玉（牙狼等）
-                if spec.lt_end_payout > 0:
-                    total_payout += spec.lt_end_payout
-                    chain_payout += spec.lt_end_payout
-                    st_payouts.append(spec.lt_end_payout)
+                        # LT継続ループ
+                        while np.random.random() < spec.st_continue_rate:
+                            denchu_payout = get_denchu_payout(spec)
+                            total_payout += denchu_payout
+                            chain_payout += denchu_payout
+                            st_payouts.append(denchu_payout)
+                            chain_count += 1
+
+                        # LT転落時出玉
+                        total_payout += spec.lt_end_payout
+                        chain_payout += spec.lt_end_payout
+                        st_payouts.append(spec.lt_end_payout)
+                else:
+                    # 通常ST継続ループ
+                    while np.random.random() < spec.st_continue_rate:
+                        denchu_payout = get_denchu_payout(spec)
+                        total_payout += denchu_payout
+                        chain_payout += denchu_payout
+                        st_payouts.append(denchu_payout)
+                        chain_count += 1
+
+                    # LT転落時出玉（通常のLT機種用、lt_challenge_rateがない場合）
+                    if spec.lt_end_payout > 0:
+                        total_payout += spec.lt_end_payout
+                        chain_payout += spec.lt_end_payout
+                        st_payouts.append(spec.lt_end_payout)
 
             chains.append(chain_count)
 
@@ -574,16 +605,33 @@ def print_session_details(results: List[SessionResult], spec: MachineSpec):
             print(f"    初当たり: {chain.first_hit_payout:,}発", end="")
 
             # ST突入・連チャン情報
-            # LT機種で転落出玉がある場合は即転落でもLTチャレンジとして扱う
+            # LTチャレンジ機種の判定
+            is_lt_challenge = spec.lt_challenge_rate > 0
             has_lt_end_payout = spec.lt_end_payout > 0 and len(chain.st_payouts) > 0
-            if chain.chain_count > 1 or has_lt_end_payout:
+
+            if is_lt_challenge and has_lt_end_payout:
+                # LTチャレンジ機種の場合
+                if chain.chain_count == 1 and len(chain.st_payouts) == 1:
+                    # LTチャレンジ敗北（初当たり1400発 + 敗北時1400発のみ）
+                    print(f" → LTチャレンジ敗北")
+                    print(f"      敗北時出玉: {chain.st_payouts[0]:,}発")
+                else:
+                    # LTチャレンジ成功 → LT突入
+                    print(f" → LTチャレンジ成功 → LT突入 → {chain.chain_count}連")
+                    # LT突入時7000発（固定）
+                    print(f"      LT突入: {chain.st_payouts[0]:,}発")
+                    # LT継続分（最後の転落出玉を除く）
+                    for k, st_payout in enumerate(chain.st_payouts[1:-1], 3):
+                        print(f"      {k}連目: {st_payout:,}発")
+                    # LT転落出玉
+                    print(f"      LT転落: {chain.st_payouts[-1]:,}発")
+            elif chain.chain_count > 1 or has_lt_end_payout:
+                # 通常LT機種またはST機種
                 st_label = "LTチャレンジ" if spec.lt_end_payout > 0 else "ST突入"
                 print(f" → {st_label} → {chain.chain_count}連")
-                # LT転落時の出玉は最後に別表示
                 display_payouts = chain.st_payouts[:-1] if spec.lt_end_payout > 0 else chain.st_payouts
                 for k, st_payout in enumerate(display_payouts, 2):
                     print(f"      {k}連目: {st_payout:,}発")
-                # LT転落出玉を表示
                 if spec.lt_end_payout > 0 and chain.st_payouts:
                     print(f"      LT転落: {chain.st_payouts[-1]:,}発")
             else:
@@ -653,9 +701,52 @@ def play_realtime_session(
         chain_count = 1
         chain_payout = initial_payout
 
-        # LT機種判定（1回転確定 & 転落出玉あり）
+        # LTチャレンジ機種の判定
+        is_lt_challenge = spec.lt_challenge_rate > 0
         is_lt_machine = spec.lt_end_payout > 0
         st_label = "LT" if is_lt_machine else "ST"
+
+        if is_lt_challenge:
+            # LTチャレンジ機種の場合
+            print(f"  >>> LTチャレンジ！")
+            wait(0.8)
+
+            # LTチャレンジ判定
+            if np.random.random() >= spec.lt_challenge_rate:
+                # LTチャレンジ敗北
+                my_balls += spec.lt_end_payout
+                chain_payout += spec.lt_end_payout
+                print(f"    LTチャレンジ敗北... +{spec.lt_end_payout:,}発")
+                wait(0.5)
+                print(f"  終了 → 1連 合計{chain_payout:,}発獲得")
+                return chain_count, chain_payout
+
+            # LTチャレンジ成功 → LT突入
+            print(f"  🔥 LTチャレンジ成功！ LT突入！")
+            my_balls += spec.lt_first_payout
+            chain_payout += spec.lt_first_payout
+            chain_count += 1
+            print(f"    LT突入: +{spec.lt_first_payout:,}発 (計{chain_payout:,}発)")
+            wait(0.6)
+
+            # LT継続ループ
+            while np.random.random() < spec.st_continue_rate:
+                chain_count += 1
+                payout = get_denchu_payout(spec)
+                my_balls += payout
+                chain_payout += payout
+                print(f"    {chain_count}連目: LT継続 +{payout:,}発 (計{chain_payout:,}発)")
+                wait(0.6)
+
+            # LT転落
+            my_balls += spec.lt_end_payout
+            chain_payout += spec.lt_end_payout
+            print(f"    LT転落 → +{spec.lt_end_payout:,}発")
+            wait(0.3)
+            print(f"  LT終了 → {chain_count}連チャン！ 合計{chain_payout:,}発獲得")
+            return chain_count, chain_payout
+
+        # 通常ST/LT機種
         entry_msg = "LTチャレンジ" if is_lt_machine else "ST突入"
         print(f"  >>> {entry_msg}！（{spec.st_spins}回転）")
         wait(0.8)
