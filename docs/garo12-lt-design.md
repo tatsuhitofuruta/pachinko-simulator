@@ -19,6 +19,9 @@
 - [1GEKI - 牙狼12 LT詳細](https://1geki.jp/pachinko/e_garo12/53/)
 - [P-GABU - e牙狼12黄金騎士極限](https://p-gabu.jp/guideworks/machinecontents/detail/6881)
 - [Altema - 牙狼12 スペック解説](https://altema.jp/pachimo/egaro12)
+- [アミュタメ - 牙狼12黄金騎士極限 評価解析](https://www.amuse-p.com/blog/e_garo12/)
+- [パチンコスペック解析 - e牙狼12](https://pachinko-spec.info/spec/158304/)
+- [団塊爺のパチンコブログ](https://dankaipachi.cocolog-nifty.com/blog/)
 
 ## 出玉変換（表記 → 実増え）
 
