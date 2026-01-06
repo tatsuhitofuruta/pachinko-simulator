@@ -351,7 +351,11 @@
                     { prob: 0.50, payout: 1400, st: true },
                     { prob: 0.50, payout: 1400, st: false }
                 ],
-                denchuPayout: 7000,
+                denchuPayout: 0,  // 振り分けありの場合は使用しない
+                denchuPayouts: [
+                    { prob: 0.329, payout: 7000 },  // 継続時約33%で7000発
+                    { prob: 0.671, payout: 1400 }   // 継続時約67%で1400発
+                ],
                 stSpins: 1,
                 jitanSpins: 0,
                 jitanRotation1k: 30,
@@ -361,12 +365,28 @@
                 chargeStRate: 0,
                 isLT: true,
                 ltEndPayout: 1400,
-                stContinueRate: 0.50
+                stContinueRate: 0.76  // LT継続率76%
             }
         };
 
         let isRunning = false;
         let shouldStop = false;
+
+        // 電チュー出玉を取得（振り分けがある場合は確率で選択）
+        function getDenchuPayout(spec) {
+            if (spec.denchuPayouts && spec.denchuPayouts.length > 0) {
+                const r = Math.random();
+                let cumulative = 0;
+                for (const item of spec.denchuPayouts) {
+                    cumulative += item.prob;
+                    if (r < cumulative) {
+                        return item.payout;
+                    }
+                }
+                return spec.denchuPayouts[spec.denchuPayouts.length - 1].payout;
+            }
+            return spec.denchuPayout;
+        }
 
         // UI更新
         function updateDisplay(rotations, balls, investment) {
@@ -564,7 +584,7 @@
                         }
 
                         chainCount++;
-                        const payout = spec.denchuPayout;
+                        const payout = getDenchuPayout(spec);
                         myBalls += payout;
                         chainPayout += payout;
                         updateDisplay(rotations, myBalls, totalInvestment);
@@ -612,7 +632,7 @@
                     if (hitInJitan) {
                         // 時短引き戻し
                         hitCount++;
-                        const payout = spec.denchuPayout;
+                        const payout = getDenchuPayout(spec);
                         myBalls += payout;
                         addLog(`🎰【当たり${hitCount}】時短${jitanSpinCount}回転目で引き戻し！ +${payout.toLocaleString()}発`, 'log-hit');
                         updateDisplay(rotations, myBalls, totalInvestment);
@@ -640,7 +660,7 @@
                             if (!hitInSt) break;
 
                             chainCount++;
-                            const p = spec.denchuPayout;
+                            const p = getDenchuPayout(spec);
                             myBalls += p;
                             chainPayout += p;
                             updateDisplay(rotations, myBalls, totalInvestment);
@@ -660,7 +680,7 @@
                                 if (Math.random() < spec.hitProb) {
                                     zanhoHit = true;
                                     hitCount++;
-                                    const payout = spec.denchuPayout;
+                                    const payout = getDenchuPayout(spec);
                                     myBalls += payout;
                                     addLog(`✨ 残保留${i + 1}個目で当たり！ +${payout.toLocaleString()}発`, 'log-hit');
                                     updateDisplay(rotations, myBalls, totalInvestment);
@@ -687,7 +707,7 @@
                                         if (!hitInSt) break;
 
                                         chainCount++;
-                                        const p = spec.denchuPayout;
+                                        const p = getDenchuPayout(spec);
                                         myBalls += p;
                                         chainPayout += p;
                                         updateDisplay(rotations, myBalls, totalInvestment);
