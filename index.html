@@ -214,6 +214,7 @@
                     <select id="machine">
                         <option value="eva15">エヴァ15（未来への咆哮）</option>
                         <option value="eva17">エヴァ17（はじまりの記憶）</option>
+                        <option value="garo12">牙狼12（黄金騎士極限）</option>
                     </select>
                 </div>
                 <div class="control-group">
@@ -316,7 +317,10 @@
                 zanhoCount: 4,
                 chargeProb: 0,
                 chargePayout: 0,
-                chargeStRate: 0
+                chargeStRate: 0,
+                isLT: false,
+                ltEndPayout: 0,
+                stContinueRate: 0.807
             },
             eva17: {
                 name: "エヴァ17（はじまりの記憶）",
@@ -334,7 +338,30 @@
                 zanhoCount: 0,
                 chargeProb: 1 / 2750.9,
                 chargePayout: 280,
-                chargeStRate: 0.02
+                chargeStRate: 0.02,
+                isLT: false,
+                ltEndPayout: 0,
+                stContinueRate: 0.795
+            },
+            garo12: {
+                name: "牙狼12（黄金騎士極限）",
+                hitProb: 1 / 437.49,
+                stHitProb: 1.0,
+                hesoPayouts: [
+                    { prob: 0.50, payout: 1400, st: true },
+                    { prob: 0.50, payout: 1400, st: false }
+                ],
+                denchuPayout: 7000,
+                stSpins: 1,
+                jitanSpins: 0,
+                jitanRotation1k: 30,
+                zanhoCount: 0,
+                chargeProb: 0,
+                chargePayout: 0,
+                chargeStRate: 0,
+                isLT: true,
+                ltEndPayout: 1400,
+                stContinueRate: 0.50
             }
         };
 
@@ -360,9 +387,9 @@
 
             if (state === '通常') {
                 className = 'state-normal';
-            } else if (state === 'ST') {
+            } else if (state === 'ST' || state === 'LT') {
                 className = 'state-st';
-                text = `ST ${extra}`;
+                text = `${state} ${extra}`;
             } else if (state === '時短') {
                 className = 'state-jitan';
                 text = `時短 ${extra}`;
@@ -508,37 +535,53 @@
                 await sleep(baseDelay * 3);
 
                 if (stEntered) {
-                    // ST処理
-                    addLog(`>>> ST突入！（${spec.stSpins}回転）`, 'log-st');
-                    setState('ST', `${spec.stSpins}回転`);
+                    // ST/LT処理
+                    const stLabel = spec.isLT ? 'LT' : 'ST';
+                    addLog(`>>> ${stLabel}突入！（${spec.stSpins}回転）`, 'log-st');
+                    setState(stLabel, `${spec.stSpins}回転`);
                     await sleep(baseDelay * 5);
 
                     let chainCount = 1;
                     let chainPayout = firstPayout;
 
+                    let stSpin = 1;  // ループ外で宣言
                     while (!shouldStop) {
-                        let stSpin = 0;
-                        let hitInSt = false;
-
-                        for (stSpin = 1; stSpin <= spec.stSpins; stSpin++) {
-                            if (Math.random() < spec.stHitProb) {
-                                hitInSt = true;
-                                break;
+                        if (spec.isLT) {
+                            // LT機種: st_continue_rateで継続判定
+                            if (Math.random() >= spec.stContinueRate) break;
+                            stSpin = 1;
+                        } else {
+                            // ST機種: 実際にST回転を消化して当たりを引く
+                            let hitInSt = false;
+                            for (stSpin = 1; stSpin <= spec.stSpins; stSpin++) {
+                                if (Math.random() < spec.stHitProb) {
+                                    hitInSt = true;
+                                    break;
+                                }
                             }
+                            if (!hitInSt) break;
                         }
-
-                        if (!hitInSt) break;
 
                         chainCount++;
                         const payout = spec.denchuPayout;
                         myBalls += payout;
                         chainPayout += payout;
                         updateDisplay(rotations, myBalls, totalInvestment);
-                        addLog(`  ${chainCount}連目: ST${stSpin}回転 +${payout.toLocaleString()}発`, 'log-chain');
+                        const spinText = spec.isLT ? `${stLabel}1回転` : `ST${stSpin}回転`;
+                        addLog(`  ${chainCount}連目: ${spinText} +${payout.toLocaleString()}発`, 'log-chain');
                         await sleep(baseDelay * 4);
                     }
 
-                    addLog(`ST終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                    // LT転落時出玉
+                    if (spec.ltEndPayout > 0) {
+                        myBalls += spec.ltEndPayout;
+                        chainPayout += spec.ltEndPayout;
+                        updateDisplay(rotations, myBalls, totalInvestment);
+                        addLog(`  LT転落 → +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
+                        await sleep(baseDelay * 2);
+                    }
+
+                    addLog(`${stLabel}終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
                 } else {
                     // 時短処理
                     addLog(`→ 単発終了（時短${spec.jitanSpins}回転へ）`, 'log-jitan');
