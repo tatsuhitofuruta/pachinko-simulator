@@ -512,7 +512,13 @@ def print_session_details(results: List[SessionResult], spec: MachineSpec):
             elif chain.is_jitan_hit:
                 label = "【時短引戻】"
 
-            rotation_text = f"{chain.first_hit_rotation}回転目" if chain.first_hit_rotation > 0 else "残保留"
+            # 回転数表示（時短引き戻しの場合は時短X回転目と表示）
+            if chain.is_jitan_hit and chain.jitan_hit_rotation > 0:
+                rotation_text = f"時短{chain.jitan_hit_rotation}回転目"
+            elif chain.first_hit_rotation > 0:
+                rotation_text = f"{chain.first_hit_rotation}回転目"
+            else:
+                rotation_text = "残保留"
             print(f"\n  ▶ 当たり{j}: {rotation_text} (累計{cumulative_rotation}回転) {label}")
             print(f"    初当たり: {chain.first_hit_payout:,}発", end="")
 
