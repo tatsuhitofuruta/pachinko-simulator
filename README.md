@@ -2,6 +2,12 @@
 
 エヴァ15（未来への咆哮）とエヴァ17（はじまりの記憶）の収支シミュレーション、ボーダー計算、確率分析ツール
 
+## 🎮 Webシミュレーター
+
+**👉 [今すぐブラウザで試す](https://tatsuhitofuruta.github.io/eva-pachinko-simulator/)**
+
+インストール不要！ブラウザだけでリアルプレイモードを体験できます。
+
 ## 機能
 
 - 🎰 **収支シミュレーション**: 指定回転数での収支分布を計算
@@ -187,6 +193,11 @@ python eva_simulator.py --play --machine eva17
 → 1000ハマりがエヴァ17では約2倍起きやすい
 
 ## 更新履歴
+
+### v1.3.0 (2025-01-06)
+- **GitHub Pages対応**
+  - ブラウザでリアルプレイモードを体験可能
+  - https://tatsuhitofuruta.github.io/eva-pachinko-simulator/
 
 ### v1.2.2 (2025-01-06)
 - **時短引き戻し回転数を表示**
