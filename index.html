@@ -404,6 +404,7 @@
                         <option value="eva15">汎用人型決戦兵器15</option>
                         <option value="eva17">汎用人型決戦兵器17</option>
                         <option value="garo12">黄金騎士12</option>
+                        <option value="ghoul">喰種</option>
                     </select>
                 </div>
                 <div class="control-group">
@@ -643,6 +644,34 @@
                 ltFirstPayout: 7000,    // LT突入時7000発固定
                 ltEndPayout: 1400,      // LT転落時1400発
                 stContinueRate: 0.76    // LT継続率76%
+            },
+            // 喰種（e東京喰種）
+            ghoul: {
+                name: "喰種",
+                hitProb: 1 / 399.9,
+                stHitProb: 1 / 95.3,
+                hesoPayouts: [
+                    { prob: 0.50, payout: 1500, st: true },   // 50%: LT突入
+                    { prob: 0.49, payout: 1500, st: false },  // 49%: 通常へ
+                    { prob: 0.01, payout: 300, st: true }     // 1%: 2R + LT突入
+                ],
+                denchuPayout: 0,
+                denchuPayouts: [
+                    { prob: 0.03, payout: 6000 },  // 3%: 6000発
+                    { prob: 0.97, payout: 3000 }   // 97%: 3000発
+                ],
+                stSpins: 130,
+                jitanSpins: 0,
+                jitanRotation1k: 30,
+                zanhoCount: 0,
+                chargeProb: 1 / 399.9,
+                chargePayout: 300,
+                chargeStRate: 0,        // チャージからST突入なし（小当たり扱い）
+                isLT: true,
+                ltChallengeRate: 0.51,  // LTチャレンジ成功率51%
+                ltFirstPayout: 3000,    // LT突入時3000発
+                ltEndPayout: 1500,      // LT転落時1500発
+                stContinueRate: 0.75    // LT継続率75%
             }
         };
 
