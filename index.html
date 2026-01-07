@@ -203,7 +203,7 @@
         }
         .cumulative-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 10px;
         }
         .cumulative-item {
@@ -488,6 +488,14 @@
                     <div class="cumulative-value" id="cumProfit">±0</div>
                     <div class="cumulative-label">累計収支</div>
                 </div>
+                <div class="cumulative-item">
+                    <div class="cumulative-value" id="cumDays">0</div>
+                    <div class="cumulative-label">稼働日数</div>
+                </div>
+                <div class="cumulative-item">
+                    <div class="cumulative-value" id="cumDailyAvg">±0</div>
+                    <div class="cumulative-label">平均収支/日</div>
+                </div>
             </div>
             </div>
 
@@ -658,9 +666,17 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
         }
 
+        function getUniqueDaysCount() {
+            const history = loadSessionHistory();
+            const uniqueDates = new Set(history.map(s => s.date));
+            return uniqueDates.size;
+        }
+
         function updateCumulativeDisplay() {
             const stats = loadCumulativeStats();
             const profit = Math.floor(stats.payout * 4) - stats.invest;  // 等価換算
+            const days = getUniqueDaysCount();
+            const dailyAvg = days > 0 ? Math.round(profit / days) : 0;
 
             document.getElementById('cumSessions').textContent = stats.sessions;
             document.getElementById('cumInvest').textContent = stats.invest.toLocaleString() + '円';
@@ -673,6 +689,19 @@
             } else {
                 profitEl.textContent = profit.toLocaleString() + '円';
                 profitEl.className = 'cumulative-value cum-minus';
+            }
+
+            // 稼働日数
+            document.getElementById('cumDays').textContent = days + '日';
+
+            // 平均収支/日
+            const dailyAvgEl = document.getElementById('cumDailyAvg');
+            if (dailyAvg >= 0) {
+                dailyAvgEl.textContent = '+' + dailyAvg.toLocaleString() + '円';
+                dailyAvgEl.className = 'cumulative-value cum-plus';
+            } else {
+                dailyAvgEl.textContent = dailyAvg.toLocaleString() + '円';
+                dailyAvgEl.className = 'cumulative-value cum-minus';
             }
         }
 
