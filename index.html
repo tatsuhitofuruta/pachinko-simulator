@@ -741,6 +741,24 @@
             return [];
         }
 
+        // 既存データを仮想日付に変換（マイグレーション）
+        function migrateToVirtualDates() {
+            const history = loadSessionHistory();
+            if (history.length === 0) return;
+
+            // 最初のセッションの日付が2026-01-01でなければマイグレーション実行
+            if (history[0].date !== '2026-01-01') {
+                const baseDate = new Date(2026, 0, 1);
+                history.forEach((session, index) => {
+                    const virtualDate = new Date(baseDate);
+                    virtualDate.setDate(baseDate.getDate() + index);
+                    session.date = virtualDate.toISOString().split('T')[0];
+                    session.day = index + 1;
+                });
+                saveSessionHistory(history);
+            }
+        }
+
         function saveSessionHistory(history) {
             localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
         }
@@ -907,6 +925,7 @@
 
         // ページ読み込み時に累計表示を更新
         document.addEventListener('DOMContentLoaded', function() {
+            migrateToVirtualDates();  // 古いデータを仮想日付に変換
             updateCumulativeDisplay();
             moveToLatestSession();
             renderCalendar();
