@@ -172,6 +172,55 @@
         .speed-control input[type="range"] {
             flex: 1;
         }
+        .cumulative-stats {
+            background: linear-gradient(135deg, #1e3a5f, #0d1b2a);
+            border: 2px solid #4ecdc4;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .cumulative-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #4ecdc4;
+        }
+        .btn-reset {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #666;
+            color: #888;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .btn-reset:hover {
+            background: rgba(255,100,100,0.2);
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+        .cumulative-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        .cumulative-item {
+            text-align: center;
+        }
+        .cumulative-value {
+            font-size: 18px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        .cumulative-label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 3px;
+        }
+        .cum-plus { color: #4ecdc4; }
+        .cum-minus { color: #ff6b6b; }
         .final-result {
             background: linear-gradient(135deg, #2d2d44, #1a1a2e);
             border: 2px solid #ff6b6b;
@@ -275,6 +324,32 @@
 
         <div class="log" id="log"></div>
 
+        <!-- 累計収支パネル -->
+        <div class="cumulative-stats" id="cumulativeStats">
+            <div class="cumulative-header">
+                <span>📊 累計収支</span>
+                <button class="btn-reset" onclick="resetCumulativeStats()">リセット</button>
+            </div>
+            <div class="cumulative-grid">
+                <div class="cumulative-item">
+                    <div class="cumulative-value" id="cumSessions">0</div>
+                    <div class="cumulative-label">稼働回数</div>
+                </div>
+                <div class="cumulative-item">
+                    <div class="cumulative-value" id="cumInvest">0</div>
+                    <div class="cumulative-label">累計投資</div>
+                </div>
+                <div class="cumulative-item">
+                    <div class="cumulative-value" id="cumPayout">0</div>
+                    <div class="cumulative-label">累計出玉</div>
+                </div>
+                <div class="cumulative-item">
+                    <div class="cumulative-value" id="cumProfit">±0</div>
+                    <div class="cumulative-label">累計収支</div>
+                </div>
+            </div>
+        </div>
+
         <div class="final-result" id="finalResult">
             <h2>🎰 最終結果</h2>
             <div class="final-stats">
@@ -373,6 +448,60 @@
 
         let isRunning = false;
         let shouldStop = false;
+
+        // ========================================
+        // 累計収支管理（localStorage）
+        // ========================================
+        const STORAGE_KEY = 'pachinko_cumulative_stats';
+
+        function loadCumulativeStats() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (data) {
+                return JSON.parse(data);
+            }
+            return { sessions: 0, invest: 0, payout: 0 };
+        }
+
+        function saveCumulativeStats(stats) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+        }
+
+        function updateCumulativeDisplay() {
+            const stats = loadCumulativeStats();
+            const profit = Math.floor(stats.payout * 4) - stats.invest;  // 等価換算
+
+            document.getElementById('cumSessions').textContent = stats.sessions;
+            document.getElementById('cumInvest').textContent = stats.invest.toLocaleString() + '円';
+            document.getElementById('cumPayout').textContent = stats.payout.toLocaleString() + '発';
+
+            const profitEl = document.getElementById('cumProfit');
+            if (profit >= 0) {
+                profitEl.textContent = '+' + profit.toLocaleString() + '円';
+                profitEl.className = 'cumulative-value cum-plus';
+            } else {
+                profitEl.textContent = profit.toLocaleString() + '円';
+                profitEl.className = 'cumulative-value cum-minus';
+            }
+        }
+
+        function addSessionResult(invest, payout) {
+            const stats = loadCumulativeStats();
+            stats.sessions++;
+            stats.invest += invest;
+            stats.payout += payout;
+            saveCumulativeStats(stats);
+            updateCumulativeDisplay();
+        }
+
+        function resetCumulativeStats() {
+            if (confirm('累計収支をリセットしますか？')) {
+                localStorage.removeItem(STORAGE_KEY);
+                updateCumulativeDisplay();
+            }
+        }
+
+        // ページ読み込み時に累計表示を更新
+        document.addEventListener('DOMContentLoaded', updateCumulativeDisplay);
 
         // 電チュー出玉を取得（振り分けがある場合は確率で選択）
         function getDenchuPayout(spec) {
@@ -800,6 +929,9 @@
             finalProfitEl.textContent = (finalProfit >= 0 ? '+' : '') + finalProfit.toLocaleString() + '円';
             finalProfitEl.className = 'final-stat-value ' + (finalProfit >= 0 ? 'profit-plus' : 'profit-minus');
             document.getElementById('finalResult').style.display = 'block';
+
+            // 累計収支に追加
+            addSessionResult(totalInvestment, Math.floor(myBalls));
 
             setState('終了');
             btn.textContent = 'もう一度';
