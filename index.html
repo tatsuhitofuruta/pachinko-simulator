@@ -270,6 +270,89 @@
         }
         .ranking-item.best .ranking-value { color: #4ecdc4; }
         .ranking-item.worst .ranking-value { color: #ff6b6b; }
+
+        /* カレンダー */
+        .calendar-panel {
+            background: linear-gradient(135deg, #1a2a3a, #0d1b2a);
+            border: 2px solid #667788;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .calendar-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            color: #4ecdc4;
+            font-weight: bold;
+        }
+        .calendar-nav {
+            background: #334455;
+            border: none;
+            color: #ccc;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .calendar-nav:hover { background: #445566; }
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            margin-bottom: 5px;
+        }
+        .weekday {
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            padding: 5px 0;
+        }
+        .weekday.sun { color: #ff6b6b; }
+        .weekday.sat { color: #66aaff; }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+        .calendar-day {
+            background: #1e2e3e;
+            border-radius: 5px;
+            padding: 5px;
+            min-height: 50px;
+            font-size: 11px;
+        }
+        .calendar-day.empty { background: transparent; }
+        .calendar-day.today { border: 1px solid #4ecdc4; }
+        .calendar-day .day-num {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 3px;
+        }
+        .calendar-day.sun .day-num { color: #ff6b6b; }
+        .calendar-day.sat .day-num { color: #66aaff; }
+        .calendar-day .day-profit {
+            font-size: 11px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        .calendar-day .day-profit.plus { color: #4ecdc4; }
+        .calendar-day .day-profit.minus { color: #ff6b6b; }
+        .calendar-day .day-count {
+            font-size: 9px;
+            color: #666;
+        }
+        .calendar-summary {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #334;
+            font-size: 14px;
+        }
+        .calendar-summary .plus { color: #4ecdc4; }
+        .calendar-summary .minus { color: #ff6b6b; }
         @media (max-width: 600px) {
             .stats-panels {
                 flex-direction: column;
@@ -435,6 +518,30 @@
             </div>
         </div>
 
+        <!-- カレンダーパネル -->
+        <div class="calendar-panel">
+            <div class="calendar-header">
+                <button class="calendar-nav" onclick="changeMonth(-1)">◀</button>
+                <span id="calendarTitle">2026年1月</span>
+                <button class="calendar-nav" onclick="changeMonth(1)">▶</button>
+                <button class="btn-reset" onclick="resetSessionHistory()">全リセット</button>
+            </div>
+            <div class="calendar-weekdays">
+                <div class="weekday sun">日</div>
+                <div class="weekday">月</div>
+                <div class="weekday">火</div>
+                <div class="weekday">水</div>
+                <div class="weekday">木</div>
+                <div class="weekday">金</div>
+                <div class="weekday sat">土</div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+            <div class="calendar-summary" id="calendarSummary">
+                <span>月間: <span id="monthSessions">0</span>稼働</span>
+                <span id="monthProfit">±0円</span>
+            </div>
+        </div>
+
         <div class="final-result" id="finalResult">
             <h2>🎰 最終結果</h2>
             <div class="final-stats">
@@ -570,12 +677,17 @@
         }
 
         function addSessionResult(invest, payout) {
+            // 累計収支更新
             const stats = loadCumulativeStats();
             stats.sessions++;
             stats.invest += invest;
             stats.payout += payout;
             saveCumulativeStats(stats);
             updateCumulativeDisplay();
+
+            // セッション履歴にも追加
+            addSessionToHistory(invest, payout);
+            renderCalendar();
         }
 
         function resetCumulativeStats() {
@@ -585,8 +697,171 @@
             }
         }
 
+        // ========================================
+        // セッション履歴管理（カレンダー用）
+        // ========================================
+        const HISTORY_KEY = 'pachinko_session_history';
+
+        function loadSessionHistory() {
+            const data = localStorage.getItem(HISTORY_KEY);
+            if (data) {
+                return JSON.parse(data);
+            }
+            return [];
+        }
+
+        function saveSessionHistory(history) {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        }
+
+        function addSessionToHistory(invest, payout) {
+            const history = loadSessionHistory();
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+            const profit = Math.round((payout * 4) - invest);
+            history.push({
+                date: dateStr,
+                timestamp: now.getTime(),
+                invest: invest,
+                payout: payout,
+                profit: profit,
+                machine: document.getElementById('machine').value
+            });
+            saveSessionHistory(history);
+        }
+
+        function getHistoryByDate(dateStr) {
+            return loadSessionHistory().filter(s => s.date === dateStr);
+        }
+
+        function getHistoryByMonth(year, month) {
+            const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+            return loadSessionHistory().filter(s => s.date.startsWith(prefix));
+        }
+
+        function resetSessionHistory() {
+            if (confirm('セッション履歴をリセットしますか？\n（累計収支・ランキングも同時にリセットされます）')) {
+                localStorage.removeItem(HISTORY_KEY);
+                localStorage.removeItem(STORAGE_KEY);
+                localStorage.removeItem(RANKING_KEY);
+                updateCumulativeDisplay();
+                updateRankingDisplay();
+                renderCalendar();
+            }
+        }
+
+        // ========================================
+        // カレンダー表示
+        // ========================================
+        let currentYear = new Date().getFullYear();
+        let currentMonth = new Date().getMonth();
+
+        function changeMonth(delta) {
+            currentMonth += delta;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            } else if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            const titleEl = document.getElementById('calendarTitle');
+            const gridEl = document.getElementById('calendarGrid');
+            const monthSessionsEl = document.getElementById('monthSessions');
+            const monthProfitEl = document.getElementById('monthProfit');
+
+            titleEl.textContent = `${currentYear}年${currentMonth + 1}月`;
+
+            // 月の最初の日と最後の日
+            const firstDay = new Date(currentYear, currentMonth, 1);
+            const lastDay = new Date(currentYear, currentMonth + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startDayOfWeek = firstDay.getDay();
+
+            // 今日の日付
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+
+            // 月のセッション履歴を取得
+            const monthHistory = getHistoryByMonth(currentYear, currentMonth);
+
+            // 日別に集計
+            const dailyStats = {};
+            monthHistory.forEach(s => {
+                if (!dailyStats[s.date]) {
+                    dailyStats[s.date] = { count: 0, profit: 0 };
+                }
+                dailyStats[s.date].count++;
+                dailyStats[s.date].profit += s.profit;
+            });
+
+            // グリッドをクリア（安全なDOM操作）
+            while (gridEl.firstChild) {
+                gridEl.removeChild(gridEl.firstChild);
+            }
+
+            // 空のセル（月初の曜日調整）
+            for (let i = 0; i < startDayOfWeek; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'calendar-day empty';
+                gridEl.appendChild(emptyCell);
+            }
+
+            // 各日のセル
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dayOfWeek = (startDayOfWeek + day - 1) % 7;
+                const isToday = dateStr === todayStr;
+
+                const cell = document.createElement('div');
+                let cellClass = 'calendar-day';
+                if (dayOfWeek === 0) cellClass += ' sun';
+                if (dayOfWeek === 6) cellClass += ' sat';
+                if (isToday) cellClass += ' today';
+                cell.className = cellClass;
+
+                // 日付番号
+                const dayNum = document.createElement('div');
+                dayNum.className = 'day-num';
+                dayNum.textContent = day;
+                cell.appendChild(dayNum);
+
+                // その日のデータがあれば表示
+                const stats = dailyStats[dateStr];
+                if (stats) {
+                    const profitDiv = document.createElement('div');
+                    profitDiv.className = 'day-profit ' + (stats.profit >= 0 ? 'plus' : 'minus');
+                    profitDiv.textContent = (stats.profit >= 0 ? '+' : '') + (stats.profit / 1000).toFixed(0) + 'k';
+                    cell.appendChild(profitDiv);
+
+                    if (stats.count > 1) {
+                        const countDiv = document.createElement('div');
+                        countDiv.className = 'day-count';
+                        countDiv.textContent = stats.count + '回';
+                        cell.appendChild(countDiv);
+                    }
+                }
+
+                gridEl.appendChild(cell);
+            }
+
+            // 月間サマリー
+            const monthTotalSessions = monthHistory.length;
+            const monthTotalProfit = monthHistory.reduce((sum, s) => sum + s.profit, 0);
+            monthSessionsEl.textContent = monthTotalSessions;
+            monthProfitEl.textContent = (monthTotalProfit >= 0 ? '+' : '') + monthTotalProfit.toLocaleString() + '円';
+            monthProfitEl.className = monthTotalProfit >= 0 ? 'plus' : 'minus';
+        }
+
         // ページ読み込み時に累計表示を更新
-        document.addEventListener('DOMContentLoaded', updateCumulativeDisplay);
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCumulativeDisplay();
+            renderCalendar();
+        });
 
         // ========================================
         // ランキング管理（localStorage）
