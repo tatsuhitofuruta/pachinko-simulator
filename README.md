@@ -1,32 +1,34 @@
-# エヴァンゲリオン パチンコシミュレーター
+# パチンコシミュレーター
 
-エヴァ15（未来への咆哮）とエヴァ17（はじまりの記憶）の収支シミュレーション、ボーダー計算、確率分析ツール
+パチンコ機種の収支シミュレーション、ボーダー計算、確率分析ツール
 
 ## 🎮 Webシミュレーター
 
-**👉 [今すぐブラウザで試す](https://tatsuhitofuruta.github.io/eva-pachinko-simulator/)**
+**👉 [今すぐブラウザで試す](https://tatsuhitofuruta.github.io/pachinko-simulator/)**
 
 インストール不要！ブラウザだけでリアルプレイモードを体験できます。
 
 ## 機能
 
 - 🎰 **収支シミュレーション**: 指定回転数での収支分布を計算
-- 📊 **機種比較**: エヴァ15 vs エヴァ17の比較
+- 📊 **機種比較**: 複数機種の比較
 - 📈 **ハマり確率**: 各回転数でのハマり確率を計算
 - ⏱️ **勝率収束**: 期待勝率に収束するまでの必要回転数を計算
 - 🕹️ **リアルプレイモード**: 実際に打っているような体験をシミュレート
+- 📊 **累計収支**: 稼働ごとの収支を自動記録（localStorage）
+- 🏆 **個人記録**: 最高/最低収支、最大連チャンを記録
 
 ## インストール
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/eva-pachinko-simulator.git
-cd eva-pachinko-simulator
+git clone https://github.com/YOUR_USERNAME/pachinko-simulator.git
+cd pachinko-simulator
 pip install -r requirements.txt
 ```
 
 ## 使い方
 
-### エヴァ15 vs エヴァ17 比較
+### 機種比較
 
 ```bash
 python eva_simulator.py --mode compare --rotation 18
@@ -47,11 +49,14 @@ python eva_simulator.py --mode convergence
 ### 単一機種シミュレーション
 
 ```bash
-# エヴァ15
+# 汎用人型決戦兵器15
 python eva_simulator.py --mode single --machine eva15 --rotation 18 --spins 2000
 
-# エヴァ17
+# 汎用人型決戦兵器17
 python eva_simulator.py --mode single --machine eva17 --rotation 18 --spins 2000
+
+# 黄金騎士12
+python eva_simulator.py --mode single --machine garo12 --rotation 17 --spins 2000
 ```
 
 ### 当たり履歴の表示
@@ -78,16 +83,15 @@ python eva_simulator.py --play
 # 高速モード
 python eva_simulator.py --play --fast
 
-# エヴァ17で実行
-python eva_simulator.py --play --machine eva17
+# 黄金騎士12で実行
+python eva_simulator.py --play --machine garo12
 ```
 
 **特徴:**
 - 回転数がリアルタイムでカウントアップ
 - 持ち玉・投資額・収支をリアルタイム表示
-- ST中は何回転目で当たったか表示
+- ST/LT中は何回転目で当たったか表示
 - 持ち玉優先消費（持ち玉がなくなってから追加投資）
-- エヴァチャージ・暴走モード・時短引き戻しに対応
 
 ## オプション
 
@@ -107,7 +111,7 @@ python eva_simulator.py --play --machine eva17
 
 ## スペック情報
 
-### エヴァ15（未来への咆哮）
+### 汎用人型決戦兵器15
 
 | 項目 | 数値 |
 |------|------|
@@ -120,7 +124,7 @@ python eva_simulator.py --play --machine eva17
 
 ※出玉は実増え（15賞玉-1発=14発/カウント）
 
-### エヴァ17（はじまりの記憶）
+### 汎用人型決戦兵器17
 
 | 項目 | 数値 |
 |------|------|
@@ -133,7 +137,7 @@ python eva_simulator.py --play --machine eva17
 
 ※出玉は実増え（15賞玉-1発=14発/カウント）
 
-### 牙狼12（黄金騎士極限）
+### 黄金騎士12
 
 | 項目 | 数値 |
 |------|------|
@@ -152,7 +156,7 @@ python eva_simulator.py --play --machine eva17
 ### 統計情報
 
 ```
-【エヴァ15（未来への咆哮）】
+【汎用人型決戦兵器15】
   勝率: 50.3%
   平均収支: +15,629円
   中央値: +689円
@@ -194,28 +198,25 @@ python eva_simulator.py --play --machine eva17
   最終収支: +12,489円
 ```
 
-## 確率の累乗効果について
-
-319と399の差は直感的には小さく感じますが、ハマり確率は累乗で効くため、深いハマりほど差が顕著になります。
-
-| 回転数 | 倍率（399/319） |
-|--------|-----------------|
-| 500回転 | 1.37倍 |
-| 1000回転 | 1.88倍 |
-| 1500回転 | 2.57倍 |
-
-→ 1000ハマりがエヴァ17では約2倍起きやすい
-
 ## 更新履歴
 
+### v1.5.0 (2025-01-07)
+- **累計収支機能追加**
+  - localStorageで稼働ごとの収支を自動記録
+  - 累計投資/出玉/収支を表示
+- **個人記録機能追加**
+  - 最高収支/最低収支/最大連チャン/一撃最高出玉を記録
+- **機種名変更**
+  - 汎用人型決戦兵器15/17、黄金騎士12に変更
+
 ### v1.4.1 (2025-01-06)
-- **牙狼12 スペック修正**
+- **黄金騎士12 スペック修正**
   - LT継続率を76%に修正（25%+51%）
   - LT継続時の出玉振り分けを実装（25%で7,000発、51%で1,400発）
   - 等価ボーダーを17.2回転に修正
 
 ### v1.4.0 (2025-01-06)
-- **牙狼12（黄金騎士極限）追加**
+- **黄金騎士12追加**
   - 大当たり確率1/437.49のLT機種
   - LTシステム: 50%でLTチャレンジ
   - `--machine garo12` で選択可能
@@ -226,7 +227,6 @@ python eva_simulator.py --play --machine eva17
 ### v1.3.0 (2025-01-06)
 - **GitHub Pages対応**
   - ブラウザでリアルプレイモードを体験可能
-  - https://tatsuhitofuruta.github.io/eva-pachinko-simulator/
 
 ### v1.2.2 (2025-01-06)
 - **時短引き戻し回転数を表示**
@@ -234,8 +234,6 @@ python eva_simulator.py --play --machine eva17
 
 ### v1.2.1 (2025-01-05)
 - **残保留数を修正**
-  - EVA15: 4個
-  - EVA17: なし
 
 ### v1.2.0 (2025-01-05)
 - **リアルプレイモード追加** (`--play`)
@@ -246,19 +244,17 @@ python eva_simulator.py --play --machine eva17
   - `--fast`で高速モード
 - **出玉計算を実増えに修正**
   - 15賞玉 - 1発(入賞) = 14発/カウント
-  - EVA15: 10R→1,400発、3R→420発
-  - EVA17: 10R→1,400発、2R→280発、8R×2→2,240発
 
 ### v1.1.0 (2025-01-05)
 - 残保留引き戻し機能
-- エヴァチャージ・暴走モード（EVA17）
+- チャージ・暴走モード
 - 時短引き戻し機能
 - 正確なラウンド振り分け（特図1/特図2分離）
 
 ### v1.0.0
 - 初回リリース
 - 収支シミュレーション
-- 機種比較（EVA15 vs EVA17）
+- 機種比較
 - ハマり確率計算
 - 勝率収束計算
 

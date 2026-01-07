@@ -69,12 +69,12 @@ class MachineSpec:
     # LT(ラッキートリガー)用
     lt_challenge_rate: float = 0.0   # LTチャレンジ成功率（0なら通常ST）
     lt_first_payout: int = 0         # LT突入時の初回出玉（固定）
-    lt_end_payout: int = 0           # LT転落時の出玉（牙狼等）
+    lt_end_payout: int = 0           # LT転落時の出玉
 
 
 # 機種スペック定義
 EVA15 = MachineSpec(
-    name="エヴァ15（未来への咆哮）",
+    name="汎用人型決戦兵器15",
     hit_prob=1 / 319.7,
     st_hit_prob=1 / 99.4,
     border_touka=17.0,
@@ -97,7 +97,7 @@ EVA15 = MachineSpec(
 )
 
 EVA17 = MachineSpec(
-    name="エヴァ17（はじまりの記憶）",
+    name="汎用人型決戦兵器17",
     hit_prob=1 / 399.9,
     st_hit_prob=1 / 99.6,
     border_touka=16.8,
@@ -126,13 +126,13 @@ EVA17 = MachineSpec(
     charge_st_rate=0.02,       # 2%で暴走（ST突入）
 )
 
-# 牙狼12 黄金騎士極限
+# 黄金騎士12
 # LTシステム:
 #   初当たり1400発 → 50%単発 / 50%LTチャレンジ
 #   LTチャレンジ: 50%成功で7000発固定 + LT突入
 #   LT継続中: 25%で7000発+継続 / 51%で1400発+継続 / 24%で1400発+転落
 GARO12 = MachineSpec(
-    name="牙狼12（黄金騎士極限）",
+    name="黄金騎士12",
     hit_prob=1 / 437.49,
     st_hit_prob=1.0,           # LT中は1回転で確定当たり
     border_touka=17.2,         # 等価ボーダー
