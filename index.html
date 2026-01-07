@@ -745,12 +745,18 @@
 
         function addSessionToHistory(invest, payout) {
             const history = loadSessionHistory();
-            const now = new Date();
-            const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+            // 仮想日付: 1回の稼働 = 1日として記録
+            // 開始日を2026-01-01として、セッション数に応じて日付を進める
+            const baseDate = new Date(2026, 0, 1); // 2026-01-01
+            const dayNumber = history.length; // 0から始まるので、これが経過日数
+            const virtualDate = new Date(baseDate);
+            virtualDate.setDate(baseDate.getDate() + dayNumber);
+            const dateStr = virtualDate.toISOString().split('T')[0];
+
             const profit = Math.round((payout * 4) - invest);
             history.push({
                 date: dateStr,
-                timestamp: now.getTime(),
+                day: dayNumber + 1, // 1日目、2日目...
                 invest: invest,
                 payout: payout,
                 profit: profit,
@@ -782,8 +788,9 @@
         // ========================================
         // カレンダー表示
         // ========================================
-        let currentYear = new Date().getFullYear();
-        let currentMonth = new Date().getMonth();
+        // 初期表示は2026年1月（仮想開始月）
+        let currentYear = 2026;
+        let currentMonth = 0;
 
         function changeMonth(delta) {
             currentMonth += delta;
@@ -811,9 +818,9 @@
             const daysInMonth = lastDay.getDate();
             const startDayOfWeek = firstDay.getDay();
 
-            // 今日の日付
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
+            // 最新セッションの日付をハイライト
+            const allHistory = loadSessionHistory();
+            const latestDateStr = allHistory.length > 0 ? allHistory[allHistory.length - 1].date : null;
 
             // 月のセッション履歴を取得
             const monthHistory = getHistoryByMonth(currentYear, currentMonth);
@@ -844,13 +851,13 @@
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const dayOfWeek = (startDayOfWeek + day - 1) % 7;
-                const isToday = dateStr === todayStr;
+                const isLatest = dateStr === latestDateStr;
 
                 const cell = document.createElement('div');
                 let cellClass = 'calendar-day';
                 if (dayOfWeek === 0) cellClass += ' sun';
                 if (dayOfWeek === 6) cellClass += ' sat';
-                if (isToday) cellClass += ' today';
+                if (isLatest) cellClass += ' today';
                 cell.className = cellClass;
 
                 // 日付番号
