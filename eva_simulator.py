@@ -1,8 +1,7 @@
 """
-エヴァンゲリオン パチンコ シミュレーター
-EVA Pachinko Simulator
+パチンコ シミュレーター
+Pachinko Simulator
 
-エヴァ15（未来への咆哮）とエヴァ17（はじまりの記憶）の
 収支シミュレーション、ボーダー計算、確率分析ツール
 """
 
@@ -25,8 +24,8 @@ class ChainDetail:
     is_jitan_hit: bool = False  # 時短引き戻しかどうか
     jitan_hit_rotation: int = 0 # 時短中何回転目で当たったか
     is_zanho_hit: bool = False  # 残保留引き戻しかどうか
-    is_charge_hit: bool = False # エヴァチャージかどうか
-    is_charge_bousou: bool = False  # エヴァチャージ暴走かどうか
+    is_charge_hit: bool = False # チャージかどうか
+    is_charge_bousou: bool = False  # チャージ暴走かどうか
 
 
 @dataclass
@@ -62,10 +61,10 @@ class MachineSpec:
     # 残保留
     zanho_count: int = 2             # 残保留数（ST/時短終了後）
     zanho_st_rate: float = 1.0       # 残保留当選時のST突入率
-    # エヴァチャージ（エヴァ17専用）
-    charge_prob: float = 0.0         # エヴァチャージ確率
-    charge_payout: int = 300         # エヴァチャージ出玉
-    charge_st_rate: float = 0.0      # エヴァチャージからのST突入率（暴走）
+    # チャージ機能
+    charge_prob: float = 0.0         # チャージ確率
+    charge_payout: int = 300         # チャージ出玉
+    charge_st_rate: float = 0.0      # チャージからのST突入率（暴走）
     # LT(ラッキートリガー)用
     lt_challenge_rate: float = 0.0   # LTチャレンジ成功率（0なら通常ST）
     lt_first_payout: int = 0         # LT突入時の初回出玉（固定）
@@ -118,10 +117,10 @@ EVA17 = MachineSpec(
     jitan_spins_on_fail=100,
     jitan_spins_after_st=0,
     jitan_rotation_per_1k=30.0,
-    zanho_count=0,             # EVA17は残保留なし
+    zanho_count=0,             # 汎用人型決戦兵器17は残保留なし
     zanho_st_rate=1.0,
-    # エヴァチャージ
-    charge_prob=1 / 2750.9,    # エヴァチャージ確率
+    # チャージ
+    charge_prob=1 / 2750.9,    # チャージ確率
     charge_payout=280,         # 2R×10C×14発
     charge_st_rate=0.02,       # 2%で暴走（ST突入）
 )
@@ -219,7 +218,7 @@ def simulate_session(
             rotations += 1
             spins_to_hit += 1
 
-            # エヴァチャージチェック（エヴァ17専用）
+            # チャージチェック
             if spec.charge_prob > 0 and np.random.random() < spec.charge_prob:
                 total_payout += spec.charge_payout
                 charge_triggered = True
@@ -234,7 +233,7 @@ def simulate_session(
         # 投資玉数を計算（通常状態）
         investment_balls += spins_to_hit / rotation_per_1k * balls_per_1k
 
-        # エヴァチャージ暴走 → ST直接突入
+        # チャージ暴走 → ST直接突入
         if charge_bousou:
             hit_rotations.append(spins_to_hit)
             first_hit_payout = spec.charge_payout  # チャージ出玉は既に加算済み
@@ -381,7 +380,7 @@ def simulate_session(
                             st_payouts.append(denchu_payout)
                             chain_count += 1
 
-                        # LT転落時出玉（牙狼等）
+                        # LT転落時出玉（黄金騎士等）
                         if spec.lt_end_payout > 0:
                             total_payout += spec.lt_end_payout
                             chain_payout += spec.lt_end_payout
@@ -424,7 +423,7 @@ def simulate_session(
                 st_payouts.append(denchu_payout)
                 chain_count += 1
 
-            # LT転落時出玉（牙狼等）
+            # LT転落時出玉（黄金騎士等）
             if spec.lt_end_payout > 0:
                 total_payout += spec.lt_end_payout
                 chain_payout += spec.lt_end_payout
@@ -808,10 +807,10 @@ def play_realtime_session(
                 show_status("通常")
                 wait(0.005)
 
-            # エヴァチャージチェック
+            # チャージチェック
             if spec.charge_prob > 0 and np.random.random() < spec.charge_prob:
                 my_balls += spec.charge_payout
-                print(f"\n  ⚡ エヴァチャージ発動！ +{spec.charge_payout}発")
+                print(f"\n  ⚡ チャージ発動！ +{spec.charge_payout}発")
                 if np.random.random() < spec.charge_st_rate:
                     charge_bousou = True
                     print("  🔥🔥🔥 暴走モード！ST突入！ 🔥🔥🔥")
@@ -835,7 +834,7 @@ def play_realtime_session(
             first_payout = spec.charge_payout
             st_entered = True
             print(f"\n\n{'='*50}")
-            print(f"  🎰 【当たり{hit_count}】{spins_to_hit}回転目 - エヴァチャージ暴走！")
+            print(f"  🎰 【当たり{hit_count}】{spins_to_hit}回転目 - チャージ暴走！")
         else:
             # 通常の初当たり
             first_payout, st_entered = get_heso_payout(spec)
@@ -932,24 +931,24 @@ def play_realtime_session(
 
 
 def compare_machines(rotation_per_1k: float, total_rotations: int = 2000, num_sims: int = 50000):
-    """エヴァ15とエヴァ17を比較"""
+    """汎用人型決戦兵器15と汎用人型決戦兵器17を比較"""
     print("=" * 60)
-    print("エヴァ15 vs エヴァ17 比較シミュレーション")
+    print("汎用人型決戦兵器15 vs 汎用人型決戦兵器17 比較シミュレーション")
     print(f"条件: 1k{rotation_per_1k}回転 / {total_rotations}回転 / 等価")
     print("=" * 60)
-    
-    # エヴァ15
+
+    # 汎用人型決戦兵器15
     eva15_over = (rotation_per_1k / EVA15.border_touka - 1) * 100
-    print(f"\nエヴァ15: ボーダー{eva15_over:+.1f}%")
+    print(f"\n汎用人型決戦兵器15: ボーダー{eva15_over:+.1f}%")
     results_15 = run_simulation(EVA15, total_rotations, rotation_per_1k, num_sims)
     print_statistics(results_15, EVA15.name)
-    
-    # エヴァ17
+
+    # 汎用人型決戦兵器17
     eva17_over = (rotation_per_1k / EVA17.border_touka - 1) * 100
-    print(f"\nエヴァ17: ボーダー{eva17_over:+.1f}%")
+    print(f"\n汎用人型決戦兵器17: ボーダー{eva17_over:+.1f}%")
     results_17 = run_simulation(EVA17, total_rotations, rotation_per_1k, num_sims)
     print_statistics(results_17, EVA17.name)
-    
+
     # サマリー
     profits_15 = np.array([r.profit for r in results_15])
     profits_17 = np.array([r.profit for r in results_17])
@@ -958,17 +957,17 @@ def compare_machines(rotation_per_1k: float, total_rotations: int = 2000, num_si
     print("=" * 60)
     print(f"{'機種':<20} {'勝率':>8} {'平均収支':>12} {'標準偏差':>10}")
     print("-" * 55)
-    print(f"{'エヴァ15':<20} {np.sum(profits_15>0)/len(profits_15)*100:>7.1f}% {np.mean(profits_15):>+11,.0f}円 {np.std(profits_15):>9,.0f}円")
-    print(f"{'エヴァ17':<20} {np.sum(profits_17>0)/len(profits_17)*100:>7.1f}% {np.mean(profits_17):>+11,.0f}円 {np.std(profits_17):>9,.0f}円")
+    print(f"{'汎用人型決戦兵器15':<20} {np.sum(profits_15>0)/len(profits_15)*100:>7.1f}% {np.mean(profits_15):>+11,.0f}円 {np.std(profits_15):>9,.0f}円")
+    print(f"{'汎用人型決戦兵器17':<20} {np.sum(profits_17>0)/len(profits_17)*100:>7.1f}% {np.mean(profits_17):>+11,.0f}円 {np.std(profits_17):>9,.0f}円")
 
 
 def hamari_comparison():
     """ハマり確率の比較"""
     print("=" * 55)
-    print("ハマり確率比較：エヴァ15 vs エヴァ17")
+    print("ハマり確率比較：汎用人型決戦兵器15 vs 汎用人型決戦兵器17")
     print("=" * 55)
-    
-    print(f"\n{'回転数':<10} {'エヴァ15':>15} {'エヴァ17':>15} {'倍率':>10}")
+
+    print(f"\n{'回転数':<10} {'汎用人型15':>15} {'汎用人型17':>15} {'倍率':>10}")
     print("-" * 55)
     
     for rot in [500, 700, 1000, 1200, 1500, 2000]:
@@ -987,7 +986,7 @@ def calculate_convergence():
     
     print("=" * 60)
     print("勝率収束に必要な稼働日数")
-    print("条件: エヴァ15、1k18回転、等価")
+    print("条件: 汎用人型決戦兵器15、1k18回転、等価")
     print("=" * 60)
     
     print(f"\n{'目標勝率':<10} {'必要日数':>10} {'必要回転数':>12}")
@@ -1002,7 +1001,7 @@ def calculate_convergence():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="エヴァ パチンコシミュレーター")
+    parser = argparse.ArgumentParser(description="パチンコシミュレーター")
     parser.add_argument("--mode", choices=["compare", "hamari", "convergence", "single"],
                         default="compare", help="実行モード")
     parser.add_argument("--rotation", type=float, default=18.0,

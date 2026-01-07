@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>エヴァ パチンコシミュレーター</title>
+    <title>パチンコシミュレーター</title>
     <style>
         * {
             box-sizing: border-box;
@@ -1190,10 +1190,10 @@
                         await sleep(baseDelay / 5);
                     }
 
-                    // エヴァチャージ
+                    // チャージ
                     if (spec.chargeProb > 0 && Math.random() < spec.chargeProb) {
                         myBalls += spec.chargePayout;
-                        addLog(`⚡ エヴァチャージ！ +${spec.chargePayout}発`, 'log-charge');
+                        addLog(`⚡ チャージ！ +${spec.chargePayout}発`, 'log-charge');
                         if (Math.random() < spec.chargeStRate) {
                             chargeBousou = true;
                             addLog('🔥🔥🔥 暴走モード！ST突入！ 🔥🔥🔥', 'log-charge');
