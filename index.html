@@ -716,6 +716,8 @@
 
             // セッション履歴にも追加
             addSessionToHistory(invest, payout);
+            // 最新セッションの月にカレンダーを移動
+            moveToLatestSession();
             renderCalendar();
         }
 
@@ -791,6 +793,16 @@
         // 初期表示は2026年1月（仮想開始月）
         let currentYear = 2026;
         let currentMonth = 0;
+
+        function moveToLatestSession() {
+            const history = loadSessionHistory();
+            if (history.length > 0) {
+                const latestDate = history[history.length - 1].date;
+                const [year, month] = latestDate.split('-').map(Number);
+                currentYear = year;
+                currentMonth = month - 1; // 0-indexed
+            }
+        }
 
         function changeMonth(delta) {
             currentMonth += delta;
@@ -896,6 +908,7 @@
         // ページ読み込み時に累計表示を更新
         document.addEventListener('DOMContentLoaded', function() {
             updateCumulativeDisplay();
+            moveToLatestSession();
             renderCalendar();
         });
 
