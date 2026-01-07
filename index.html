@@ -221,6 +221,63 @@
         }
         .cum-plus { color: #4ecdc4; }
         .cum-minus { color: #ff6b6b; }
+        .stats-panels {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stats-panels .cumulative-stats {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        .ranking-panel {
+            flex: 1;
+            background: linear-gradient(135deg, #3d2a1e, #1a1a2e);
+            border: 2px solid #f59e0b;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        .ranking-panel .cumulative-header {
+            color: #f59e0b;
+        }
+        .ranking-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .ranking-item {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        .ranking-item.best {
+            border-left: 3px solid #4ecdc4;
+        }
+        .ranking-item.worst {
+            border-left: 3px solid #ff6b6b;
+        }
+        .ranking-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .ranking-value {
+            font-size: 16px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: #f59e0b;
+        }
+        .ranking-item.best .ranking-value { color: #4ecdc4; }
+        .ranking-item.worst .ranking-value { color: #ff6b6b; }
+        @media (max-width: 600px) {
+            .stats-panels {
+                flex-direction: column;
+            }
+            .cumulative-grid, .ranking-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
         .final-result {
             background: linear-gradient(135deg, #2d2d44, #1a1a2e);
             border: 2px solid #ff6b6b;
@@ -324,12 +381,13 @@
 
         <div class="log" id="log"></div>
 
-        <!-- 累計収支パネル -->
-        <div class="cumulative-stats" id="cumulativeStats">
-            <div class="cumulative-header">
-                <span>📊 累計収支</span>
-                <button class="btn-reset" onclick="resetCumulativeStats()">リセット</button>
-            </div>
+        <!-- 累計収支 & ランキングパネル -->
+        <div class="stats-panels">
+            <div class="cumulative-stats">
+                <div class="cumulative-header">
+                    <span>📊 累計収支</span>
+                    <button class="btn-reset" onclick="resetCumulativeStats()">リセット</button>
+                </div>
             <div class="cumulative-grid">
                 <div class="cumulative-item">
                     <div class="cumulative-value" id="cumSessions">0</div>
@@ -346,6 +404,33 @@
                 <div class="cumulative-item">
                     <div class="cumulative-value" id="cumProfit">±0</div>
                     <div class="cumulative-label">累計収支</div>
+                </div>
+            </div>
+            </div>
+
+            <!-- ランキングパネル -->
+            <div class="ranking-panel">
+                <div class="cumulative-header">
+                    <span>🏆 個人記録</span>
+                    <button class="btn-reset" onclick="resetRankingStats()">リセット</button>
+                </div>
+                <div class="ranking-grid">
+                    <div class="ranking-item best">
+                        <div class="ranking-label">最高収支</div>
+                        <div class="ranking-value" id="rankBestProfit">---</div>
+                    </div>
+                    <div class="ranking-item worst">
+                        <div class="ranking-label">最低収支</div>
+                        <div class="ranking-value" id="rankWorstProfit">---</div>
+                    </div>
+                    <div class="ranking-item">
+                        <div class="ranking-label">最大連チャン</div>
+                        <div class="ranking-value" id="rankMaxChain">---</div>
+                    </div>
+                    <div class="ranking-item">
+                        <div class="ranking-label">一撃最高出玉</div>
+                        <div class="ranking-value" id="rankMaxPayout">---</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -503,6 +588,92 @@
         // ページ読み込み時に累計表示を更新
         document.addEventListener('DOMContentLoaded', updateCumulativeDisplay);
 
+        // ========================================
+        // ランキング管理（localStorage）
+        // ========================================
+        const RANKING_KEY = 'pachinko_ranking_stats';
+
+        function loadRankingStats() {
+            const data = localStorage.getItem(RANKING_KEY);
+            if (data) {
+                return JSON.parse(data);
+            }
+            return {
+                bestProfit: null,
+                worstProfit: null,
+                maxChain: null,
+                maxPayout: null
+            };
+        }
+
+        function saveRankingStats(stats) {
+            localStorage.setItem(RANKING_KEY, JSON.stringify(stats));
+        }
+
+        function updateRankingDisplay() {
+            const stats = loadRankingStats();
+
+            const bestEl = document.getElementById('rankBestProfit');
+            const worstEl = document.getElementById('rankWorstProfit');
+            const chainEl = document.getElementById('rankMaxChain');
+            const payoutEl = document.getElementById('rankMaxPayout');
+
+            bestEl.textContent = stats.bestProfit !== null
+                ? '+' + stats.bestProfit.toLocaleString() + '円' : '---';
+            worstEl.textContent = stats.worstProfit !== null
+                ? stats.worstProfit.toLocaleString() + '円' : '---';
+            chainEl.textContent = stats.maxChain !== null
+                ? stats.maxChain + '連' : '---';
+            payoutEl.textContent = stats.maxPayout !== null
+                ? stats.maxPayout.toLocaleString() + '発' : '---';
+        }
+
+        function updateRankingWithResult(profit, maxChain, totalPayout) {
+            const stats = loadRankingStats();
+            let updated = false;
+
+            // 最高収支（プラスの記録のみ）
+            if (profit > 0 && (stats.bestProfit === null || profit > stats.bestProfit)) {
+                stats.bestProfit = profit;
+                updated = true;
+            }
+
+            // 最低収支（マイナスの記録のみ）
+            if (profit < 0 && (stats.worstProfit === null || profit < stats.worstProfit)) {
+                stats.worstProfit = profit;
+                updated = true;
+            }
+
+            // 最大連チャン
+            if (stats.maxChain === null || maxChain > stats.maxChain) {
+                stats.maxChain = maxChain;
+                updated = true;
+            }
+
+            // 一撃最高出玉
+            if (stats.maxPayout === null || totalPayout > stats.maxPayout) {
+                stats.maxPayout = totalPayout;
+                updated = true;
+            }
+
+            if (updated) {
+                saveRankingStats(stats);
+                updateRankingDisplay();
+            }
+
+            return updated;
+        }
+
+        function resetRankingStats() {
+            if (confirm('個人記録をリセットしますか？')) {
+                localStorage.removeItem(RANKING_KEY);
+                updateRankingDisplay();
+            }
+        }
+
+        // ページ読み込み時にランキング表示を更新
+        document.addEventListener('DOMContentLoaded', updateRankingDisplay);
+
         // 電チュー出玉を取得（振り分けがある場合は確率で選択）
         function getDenchuPayout(spec) {
             if (spec.denchuPayouts && spec.denchuPayouts.length > 0) {
@@ -616,6 +787,7 @@
             let myBalls = 0;
             let totalInvestment = 0;
             let hitCount = 0;
+            let maxSessionChain = 0;  // セッション中の最大連チャン
 
             function consumeBalls(amount) {
                 if (myBalls >= amount) {
@@ -736,6 +908,7 @@
                             addLog(`  LT転落 → +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
                             await sleep(baseDelay * 2);
                             addLog(`LT終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                            maxSessionChain = Math.max(maxSessionChain, chainCount);
                         }
                     } else {
                         // 通常ST/LT機種
@@ -780,6 +953,7 @@
                         }
 
                         addLog(`${stLabel}終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                        maxSessionChain = Math.max(maxSessionChain, chainCount);
                     }
                 } else {
                     // 時短処理
@@ -847,6 +1021,7 @@
                         }
 
                         addLog(`ST終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                        maxSessionChain = Math.max(maxSessionChain, chainCount);
                     } else {
                         // 残保留チェック
                         if (spec.zanhoCount > 0) {
@@ -894,6 +1069,7 @@
                                     }
 
                                     addLog(`ST終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                                    maxSessionChain = Math.max(maxSessionChain, chainCount);
                                     break;
                                 }
                             }
@@ -932,6 +1108,9 @@
 
             // 累計収支に追加
             addSessionResult(totalInvestment, Math.floor(myBalls));
+
+            // ランキング更新
+            updateRankingWithResult(finalProfit, maxSessionChain, Math.floor(myBalls));
 
             setState('終了');
             btn.textContent = 'もう一度';
