@@ -29,39 +29,39 @@
 
 ## シミュレーター実装方針
 
-初代牙狼はST機ではなく1種2種混合機のため、LTシステムに近い形で実装。
+初代牙狼はST機ではなく1種2種混合機のため、継続率システム（内部的にはLTフラグを利用）で実装。
 
 ```javascript
 garo: {
     name: "黄金騎士",
     hitProb: 1 / 397.18,
-    stHitProb: 1 / 1,        // RUSH中は100%当選（V入賞）
+    stHitProb: 1 / 1,        // 魔戒チャンス中は100%当選（V入賞）
     hesoPayouts: [
-        { prob: 0.50, payout: 1750, st: true },  // 50%: RUSH突入
-        { prob: 0.50, payout: 1750, st: false }  // 50%: 通常へ
+        { prob: 0.50, payout: 1750, st: true },   // 50%: 魔戒チャンス突入
+        { prob: 0.50, payout: 1750, st: false }   // 50%: 通常へ
     ],
     denchuPayouts: [
-        { prob: 1.0, payout: 1750 }  // 15R固定
+        { prob: 1.0, payout: 1750 }   // 15R固定
     ],
     stSpins: 99,             // 魔戒チャンス時短回転
     jitanSpins: 0,
-    jitanRotation1k: 25,     // 1k=25回転
+    jitanRotation1k: 25,
     zanhoCount: 0,
     chargeProb: 0,           // チャージなし
     chargePayout: 0,
     chargeStRate: 0,
-    isLT: true,              // LT的な継続システム
-    ltChallengeRate: 0.50,   // RUSH突入率50%
+    isLT: true,              // 継続率システム（内部フラグ）
+    ltChallengeRate: 0.50,   // 魔戒チャンス突入率50%
     ltFirstPayout: 0,        // 追加出玉なし
     ltEndPayout: 1750,       // 転落時も15R
-    stContinueRate: 0.82     // RUSH継続率82%
+    stContinueRate: 0.82     // 魔戒チャンス継続率82%
 }
 ```
 
 ## 確認事項
 
 - [x] 大当たり確率: 1/397.18（MAXタイプ）
-- [x] RUSH突入率: 50%
-- [x] RUSH継続率: 82%
+- [x] 魔戒チャンス突入率: 50%
+- [x] 魔戒チャンス継続率: 82%
 - [x] 出玉: 全15R（約1750発実獲得）
 - [x] チャージ: なし

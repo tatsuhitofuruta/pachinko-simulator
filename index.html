@@ -623,9 +623,9 @@
             garo: {
                 name: "黄金騎士",
                 hitProb: 1 / 397.18,     // MAXタイプ
-                stHitProb: 1.0,          // RUSH中は100%（V入賞）
+                stHitProb: 1.0,          // 魔戒チャンス中は100%（V入賞）
                 hesoPayouts: [
-                    { prob: 0.50, payout: 1750, st: true },   // 50%: RUSH突入
+                    { prob: 0.50, payout: 1750, st: true },   // 50%: 魔戒チャンス突入
                     { prob: 0.50, payout: 1750, st: false }   // 50%: 通常へ
                 ],
                 denchuPayouts: [
@@ -638,11 +638,11 @@
                 chargeProb: 0,           // チャージなし
                 chargePayout: 0,
                 chargeStRate: 0,
-                isLT: true,              // LT的な継続システム
-                ltChallengeRate: 0.50,   // RUSH突入率50%
+                isLT: true,              // 継続率システム（内部フラグ）
+                ltChallengeRate: 0.50,   // 魔戒チャンス突入率50%
                 ltFirstPayout: 0,        // 追加出玉なし
                 ltEndPayout: 1750,       // 転落時も15R
-                stContinueRate: 0.82     // RUSH継続率82%
+                stContinueRate: 0.82     // 魔戒チャンス継続率82%
             },
             garo12: {
                 name: "黄金騎士12",
