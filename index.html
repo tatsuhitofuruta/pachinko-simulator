@@ -403,6 +403,7 @@
                     <select id="machine">
                         <option value="eva15">汎用人型決戦兵器15</option>
                         <option value="eva17">汎用人型決戦兵器17</option>
+                        <option value="garo">黄金騎士</option>
                         <option value="garo12">黄金騎士12</option>
                         <option value="ghoul">喰種</option>
                     </select>
@@ -618,6 +619,30 @@
                 isLT: false,
                 ltEndPayout: 0,
                 stContinueRate: 0.795
+            },
+            garo: {
+                name: "黄金騎士",
+                hitProb: 1 / 397.18,     // MAXタイプ
+                stHitProb: 1.0,          // RUSH中は100%（V入賞）
+                hesoPayouts: [
+                    { prob: 0.50, payout: 1750, st: true },   // 50%: RUSH突入
+                    { prob: 0.50, payout: 1750, st: false }   // 50%: 通常へ
+                ],
+                denchuPayouts: [
+                    { prob: 1.0, payout: 1750 }   // 15R固定
+                ],
+                stSpins: 99,             // 魔戒チャンス時短回転
+                jitanSpins: 0,
+                jitanRotation1k: 25,
+                zanhoCount: 0,
+                chargeProb: 0,           // チャージなし
+                chargePayout: 0,
+                chargeStRate: 0,
+                isLT: true,              // LT的な継続システム
+                ltChallengeRate: 0.50,   // RUSH突入率50%
+                ltFirstPayout: 0,        // 追加出玉なし
+                ltEndPayout: 1750,       // 転落時も15R
+                stContinueRate: 0.82     // RUSH継続率82%
             },
             garo12: {
                 name: "黄金騎士12",
