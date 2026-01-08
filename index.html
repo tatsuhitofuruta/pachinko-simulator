@@ -700,6 +700,18 @@
             }
         };
 
+        // 機種別RUSH名称を取得
+        function getRushName(machineKey) {
+            const rushNames = {
+                eva15: 'インパクトモード',
+                eva17: 'インパクトモード',
+                garo: '魔戒チャンス',
+                garo12: '魔戒チャンスLT',
+                ghoul: 'HYPER喰種RUSH'
+            };
+            return rushNames[machineKey] || 'RUSH';
+        }
+
         let isRunning = false;
         let shouldStop = false;
 
@@ -1221,7 +1233,7 @@
                         addLog(`⚡ チャージ！ +${spec.chargePayout}発`, 'log-charge');
                         if (Math.random() < spec.chargeStRate) {
                             chargeBousou = true;
-                            addLog('🔥🔥🔥 暴走モード！ST突入！ 🔥🔥🔥', 'log-charge');
+                            addLog(`🔥🔥🔥 暴走モード！${getRushName(machineKey)}突入！ 🔥🔥🔥`, 'log-charge');
                             await sleep(baseDelay * 5);
                             break;
                         }
@@ -1243,7 +1255,7 @@
                 if (chargeBousou) {
                     firstPayout = spec.chargePayout;
                     stEntered = true;
-                    addLog(`🎰【当たり${hitCount}】暴走からST突入！`, 'log-hit');
+                    addLog(`🎰【当たり${hitCount}】暴走から${getRushName(machineKey)}突入！`, 'log-hit');
                 } else {
                     const result = getHesoResult(spec);
                     firstPayout = result.payout;
@@ -1309,8 +1321,8 @@
                         }
                     } else {
                         // 通常ST/LT機種
-                        const entryMsg = spec.isLT ? 'LTチャレンジ' : 'ST突入';
-                        addLog(`>>> ${entryMsg}！（${spec.stSpins}回転）`, 'log-st');
+                        const rushName = getRushName(machineKey);
+                        addLog(`>>> ${rushName}突入！（${spec.stSpins}回転）`, 'log-st');
                         setState(stLabel, `${spec.stSpins}回転`);
                         await sleep(baseDelay * 5);
 
@@ -1351,6 +1363,62 @@
 
                         addLog(`${stLabel}終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
                         maxSessionChain = Math.max(maxSessionChain, chainCount);
+
+                        // インパクトモード終了後の残保留チェック（eva15向け）
+                        if (!spec.isLT && spec.zanhoCount > 0) {
+                            addLog(`残保留チェック（${spec.zanhoCount}個）...`, 'log-jitan');
+                            await sleep(baseDelay * 2);
+
+                            let zanhoHit = false;
+                            for (let i = 0; i < spec.zanhoCount; i++) {
+                                if (Math.random() < spec.hitProb) {
+                                    zanhoHit = true;
+                                    hitCount++;
+                                    const payout = getDenchuPayout(spec);
+                                    myBalls += payout;
+                                    addLog(`✨ 残保留${i + 1}個目で当たり！ +${payout.toLocaleString()}発`, 'log-hit');
+                                    updateDisplay(rotations, myBalls, totalInvestment);
+
+                                    // 再度インパクトモードへ
+                                    const rushName = getRushName(machineKey);
+                                    addLog(`>>> ${rushName}再突入！（${spec.stSpins}回転）`, 'log-st');
+                                    setState(rushName, `${spec.stSpins}回転`);
+                                    await sleep(baseDelay * 5);
+
+                                    chainCount = 1;
+                                    chainPayout = payout;
+
+                                    // 再度STループ
+                                    while (!shouldStop) {
+                                        let hitInSt = false;
+                                        let stSpin2;
+                                        for (stSpin2 = 1; stSpin2 <= spec.stSpins; stSpin2++) {
+                                            if (Math.random() < spec.stHitProb) {
+                                                hitInSt = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!hitInSt) break;
+
+                                        chainCount++;
+                                        const p = getDenchuPayout(spec);
+                                        myBalls += p;
+                                        chainPayout += p;
+                                        updateDisplay(rotations, myBalls, totalInvestment);
+                                        addLog(`  ${chainCount}連目: ST${stSpin2}回転 +${p.toLocaleString()}発`, 'log-chain');
+                                        await sleep(baseDelay * 4);
+                                    }
+
+                                    addLog(`${stLabel}終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                                    maxSessionChain = Math.max(maxSessionChain, chainCount);
+                                    break;
+                                }
+                            }
+
+                            if (!zanhoHit) {
+                                addLog(`→ 通常状態へ`, 'log-jitan');
+                            }
+                        }
                     }
                 } else {
                     // 時短処理
@@ -1387,9 +1455,10 @@
                         updateDisplay(rotations, myBalls, totalInvestment);
                         await sleep(baseDelay * 3);
 
-                        // ST突入
-                        addLog(`>>> ST突入！（${spec.stSpins}回転）`, 'log-st');
-                        setState('ST', `${spec.stSpins}回転`);
+                        // RUSH突入
+                        const rushName = getRushName(machineKey);
+                        addLog(`>>> ${rushName}突入！（${spec.stSpins}回転）`, 'log-st');
+                        setState(rushName, `${spec.stSpins}回転`);
                         await sleep(baseDelay * 5);
 
                         let chainCount = 1;
@@ -1435,9 +1504,10 @@
                                     addLog(`✨ 残保留${i + 1}個目で当たり！ +${payout.toLocaleString()}発`, 'log-hit');
                                     updateDisplay(rotations, myBalls, totalInvestment);
 
-                                    // ST処理
-                                    addLog(`>>> ST突入！（${spec.stSpins}回転）`, 'log-st');
-                                    setState('ST', `${spec.stSpins}回転`);
+                                    // RUSH処理
+                                    const rushName = getRushName(machineKey);
+                                    addLog(`>>> ${rushName}突入！（${spec.stSpins}回転）`, 'log-st');
+                                    setState(rushName, `${spec.stSpins}回転`);
                                     await sleep(baseDelay * 5);
 
                                     let chainCount = 1;
