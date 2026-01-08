@@ -711,6 +711,16 @@
             return rushNames[machineKey] || 'RUSH';
         }
 
+        // 機種別チャレンジ名称を取得（LT突入バトル）
+        function getChallengeName(machineKey) {
+            const challengeNames = {
+                garo: 'キババトル',
+                garo12: '極限バトル',
+                ghoul: '喰種バトル'
+            };
+            return challengeNames[machineKey] || 'LTチャレンジ';
+        }
+
         let isRunning = false;
         let shouldStop = false;
 
@@ -1273,49 +1283,51 @@
                     let chainPayout = firstPayout;
 
                     if (isLtChallenge) {
-                        // LTチャレンジ機種の場合
-                        addLog(`>>> LTチャレンジ！`, 'log-st');
-                        setState('LTチャレンジ');
+                        // チャレンジ機種の場合（牙狼系・喰種）
+                        const challengeName = getChallengeName(machineKey);
+                        const rushName = getRushName(machineKey);
+                        addLog(`>>> ${challengeName}！`, 'log-st');
+                        setState(challengeName);
                         await sleep(baseDelay * 5);
 
-                        // LTチャレンジ判定
+                        // チャレンジ判定
                         if (Math.random() >= spec.ltChallengeRate) {
-                            // LTチャレンジ敗北
+                            // チャレンジ敗北
                             myBalls += spec.ltEndPayout;
                             chainPayout += spec.ltEndPayout;
                             updateDisplay(rotations, myBalls, totalInvestment);
-                            addLog(`  LTチャレンジ敗北... +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
+                            addLog(`  ${challengeName}敗北... +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
                             await sleep(baseDelay * 3);
                             addLog(`終了 → 1連 計${chainPayout.toLocaleString()}発`, 'log-st');
                         } else {
-                            // LTチャレンジ成功 → LT突入
-                            addLog(`🔥 LTチャレンジ成功！ LT突入！`, 'log-st');
+                            // チャレンジ成功 → RUSH突入
+                            addLog(`🔥 ${challengeName}勝利！ ${rushName}突入！`, 'log-st');
                             myBalls += spec.ltFirstPayout;
                             chainPayout += spec.ltFirstPayout;
                             chainCount++;
                             updateDisplay(rotations, myBalls, totalInvestment);
-                            addLog(`  LT突入: +${spec.ltFirstPayout.toLocaleString()}発`, 'log-chain');
+                            addLog(`  ${rushName}突入: +${spec.ltFirstPayout.toLocaleString()}発`, 'log-chain');
                             await sleep(baseDelay * 4);
-                            setState('LT');
+                            setState(rushName);
 
-                            // LT継続ループ
+                            // RUSH継続ループ
                             while (!shouldStop && Math.random() < spec.stContinueRate) {
                                 chainCount++;
                                 const payout = getDenchuPayout(spec);
                                 myBalls += payout;
                                 chainPayout += payout;
                                 updateDisplay(rotations, myBalls, totalInvestment);
-                                addLog(`  ${chainCount}連目: LT継続 +${payout.toLocaleString()}発`, 'log-chain');
+                                addLog(`  ${chainCount}連目: ${rushName}継続 +${payout.toLocaleString()}発`, 'log-chain');
                                 await sleep(baseDelay * 4);
                             }
 
-                            // LT転落
+                            // RUSH転落
                             myBalls += spec.ltEndPayout;
                             chainPayout += spec.ltEndPayout;
                             updateDisplay(rotations, myBalls, totalInvestment);
-                            addLog(`  LT転落 → +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
+                            addLog(`  ${rushName}転落 → +${spec.ltEndPayout.toLocaleString()}発`, 'log-chain');
                             await sleep(baseDelay * 2);
-                            addLog(`LT終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
+                            addLog(`${rushName}終了 → ${chainCount}連チャン！ 計${chainPayout.toLocaleString()}発`, 'log-st');
                             maxSessionChain = Math.max(maxSessionChain, chainCount);
                         }
                     } else {
